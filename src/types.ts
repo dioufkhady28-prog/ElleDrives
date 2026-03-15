@@ -23,6 +23,7 @@ export interface Reservation {
   sieges?: number;
   valises?: number;
   extras?: string[];
+  isRoundTrip?: boolean;
 
   // Dispo specific
   duree?: string;
@@ -44,4 +45,18 @@ export interface Reservation {
   retourConfirme?: boolean;
   retourDate?: string;
   penalite?: number;
+  withDriver?: boolean;
+  locationZone?: 'dakar' | 'hors-dakar';
+
+  // Feedback
+  rating?: number;
+  feedback?: string;
+}
+
+export interface TouristSite {
+  id: string;
+  title: string;
+  desc: string;
+  img: string;
+  order?: number;
 }

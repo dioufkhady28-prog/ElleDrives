@@ -20,12 +20,44 @@
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["id", "nom", "whatsapp", "type", "montant", "status"]
+    },
+    "TouristSite": {
+      "title": "TouristSite",
+      "description": "A tourist destination in Senegal",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "desc": { "type": "string" },
+        "img": { "type": "string" },
+        "order": { "type": "number" }
+      },
+      "required": ["id", "title", "desc", "img"]
+    },
+    "User": {
+      "title": "User",
+      "description": "User profile and roles",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "user"] }
+      },
+      "required": ["uid", "email", "role"]
     }
   },
   "firestore": {
     "reservations/{reservationId}": {
       "schema": "Reservation",
       "description": "Collection of all transport bookings"
+    },
+    "tourisme/{siteId}": {
+      "schema": "TouristSite",
+      "description": "Collection of tourist sites"
+    },
+    "users/{userId}": {
+      "schema": "User",
+      "description": "User profiles"
     }
   }
 }

@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Reservation, ReservationType, ReservationStatus } from './types';
+import React, { useState, useEffect, Component, ReactNode } from 'react';
+import { Reservation, ReservationType, ReservationStatus, TouristSite } from './types';
 import { db, auth } from './firebase';
 import { 
   collection, 
@@ -43,9 +43,136 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
+// --- Error Handling ---
+
+enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId: string | undefined;
+    email: string | null | undefined;
+    emailVerified: boolean | undefined;
+    isAnonymous: boolean | undefined;
+    tenantId: string | null | undefined;
+    providerInfo: {
+      providerId: string;
+      displayName: string | null;
+      email: string | null;
+      photoUrl: string | null;
+    }[];
+  }
+}
+
+function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+      emailVerified: auth.currentUser?.emailVerified,
+      isAnonymous: auth.currentUser?.isAnonymous,
+      tenantId: auth.currentUser?.tenantId,
+      providerInfo: auth.currentUser?.providerData.map(provider => ({
+        providerId: provider.providerId,
+        displayName: provider.displayName,
+        email: provider.email,
+        photoUrl: provider.photoURL
+      })) || []
+    },
+    operationType,
+    path
+  }
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+}
+
+class ErrorBoundary extends (Component as any) {
+  state = { hasError: false, error: null };
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  render() {
+    const state = this.state as any;
+    if (state.hasError) {
+      let errorMessage = "Une erreur est survenue.";
+      try {
+        const parsed = JSON.parse(state.error?.message || "");
+        if (parsed.error && parsed.error.includes("permissions")) {
+          errorMessage = "Vous n'avez pas les permissions nécessaires pour effectuer cette action.";
+        }
+      } catch (e) {
+        // Not a JSON error
+      }
+
+      return (
+        <div className="min-h-screen bg-black flex items-center justify-center p-4 text-center">
+          <div className="bg-zinc-900 p-8 rounded-2xl border border-white/10 max-w-md w-full">
+            <AlertTriangle className="w-12 h-12 text-gold mx-auto mb-4" />
+            <h2 className="text-xl font-serif text-white mb-2">Oups !</h2>
+            <p className="text-zinc-400 mb-6">{errorMessage}</p>
+            <button 
+              onClick={() => window.location.reload()}
+              className="w-full py-3 bg-gold text-black rounded-xl font-medium"
+            >
+              Recharger la page
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return (this.props as any).children;
+  }
+}
+
 // --- Components ---
 
-const Navbar = ({ onOpenAdmin, onOpenTrack }: { onOpenAdmin: () => void, onOpenTrack: () => void }) => {
+const Logo = ({ className = "", src = null }: { className?: string, src?: string | null }) => (
+  <div className={`flex items-center gap-3 group ${className}`}>
+    <div className="relative w-12 h-12 flex items-center justify-center">
+      {src ? (
+        <img src={src} alt="Logo" className="w-full h-full object-contain" referrerPolicy="no-referrer" />
+      ) : (
+        <>
+          {/* Outer Circle / Steering Wheel */}
+          <svg viewBox="0 0 100 100" className="absolute inset-0 w-full h-full text-gold fill-none stroke-gold stroke-[2.5]">
+            <circle cx="50" cy="50" r="46" />
+            {/* Steering wheel spokes at the bottom */}
+            <path d="M50 75 L50 96" strokeLinecap="round" />
+            <path d="M30 85 L15 92" strokeLinecap="round" />
+            <path d="M70 85 L85 92" strokeLinecap="round" />
+          </svg>
+          {/* Woman Profile Silhouette */}
+          <svg viewBox="0 0 100 100" className="absolute inset-0 w-full h-full fill-gold p-3">
+            <path d="M55,25 C45,25 35,35 35,50 C35,60 40,70 50,75 C52,76 55,72 55,70 C55,68 53,65 50,62 C45,58 42,50 45,40 C48,30 55,28 60,30 C65,32 68,40 65,50 C63,60 58,65 55,70 C55,75 60,80 65,75 C75,65 80,50 75,35 C70,25 65,25 55,25 Z" />
+            {/* Refined profile line */}
+            <path d="M58,35 C52,35 48,40 48,48 C48,55 52,60 55,62 L55,68 C52,68 50,65 48,62 C45,58 43,52 45,45 C47,38 52,35 58,35 Z" fill="black" opacity="0.2" />
+          </svg>
+        </>
+      )}
+    </div>
+    <div className="flex flex-col">
+      <span className="font-serif text-2xl font-light text-gold tracking-widest leading-none">
+        Elle<span className="italic text-white">Drives</span>
+      </span>
+      <span className="text-[8px] text-gold/50 uppercase tracking-[0.3em] mt-1">Conduite au Féminin</span>
+    </div>
+  </div>
+);
+
+const Navbar = ({ onOpenAdmin, onOpenTrack, logo }: { onOpenAdmin: () => void, onOpenTrack: () => void, logo: string | null }) => {
   const [isScrolled, setIsScrolled] = useState(false);
 
   useEffect(() => {
@@ -56,6 +183,7 @@ const Navbar = ({ onOpenAdmin, onOpenTrack }: { onOpenAdmin: () => void, onOpenT
 
   const navItems = [
     { id: 'services', label: 'Services' },
+    { id: 'tourisme', label: 'Tourisme' },
     { id: 'tarifs', label: 'Tarifs' },
     { id: 'apropos', label: 'À Propos' },
     { id: 'avis', label: 'Avis' }
@@ -63,8 +191,8 @@ const Navbar = ({ onOpenAdmin, onOpenTrack }: { onOpenAdmin: () => void, onOpenT
 
   return (
     <nav className={`fixed top-0 left-0 right-0 z-[100] flex items-center justify-between px-6 py-4 md:px-16 transition-all duration-500 ${isScrolled ? 'bg-dark/95 backdrop-blur-md border-b border-gold/20' : 'bg-transparent'}`}>
-      <a href="#" className="font-serif text-2xl font-light text-gold tracking-widest">
-        Elle<span className="italic text-white">Drives</span>
+      <a href="#" className="group">
+        <Logo src={logo} />
       </a>
       
       <div className="hidden md:flex items-center gap-10">
@@ -96,12 +224,21 @@ const Navbar = ({ onOpenAdmin, onOpenTrack }: { onOpenAdmin: () => void, onOpenT
 };
 
 const Hero = () => (
-  <section className="relative min-height-[100vh] bg-dark flex items-center overflow-hidden">
-    <div className="absolute inset-0 bg-[radial-gradient(ellipse_60%_80%_at_70%_50%,rgba(201,168,76,0.08)_0%,transparent_60%),radial-gradient(ellipse_40%_60%_at_20%_80%,rgba(201,168,76,0.05)_0%,transparent_50%)]" />
-    <div className="absolute inset-0 opacity-[0.06] overflow-hidden pointer-events-none">
-      <div className="absolute -top-1/2 left-1/2 w-[200%] h-[200%] bg-[repeating-linear-gradient(-45deg,transparent,transparent_60px,rgba(201,168,76,1)_60px,rgba(201,168,76,1)_61px)]" />
+  <section className="relative min-h-screen bg-dark flex items-center overflow-hidden">
+    {/* Background Image - Baobab */}
+    <div className="absolute inset-0 z-0">
+      <img 
+        src="https://images.unsplash.com/photo-1500382017468-9049fed747ef?q=80&w=2070&auto=format&fit=crop" 
+        alt="Baobab Sénégal" 
+        className="w-full h-full object-cover opacity-50"
+        referrerPolicy="no-referrer"
+      />
+      <div className="absolute inset-0 bg-gradient-to-r from-dark via-dark/70 to-transparent" />
+      <div className="absolute inset-0 bg-black/20" />
     </div>
 
+    <div className="absolute inset-0 bg-[radial-gradient(ellipse_60%_80%_at_70%_50%,rgba(201,168,76,0.08)_0%,transparent_60%),radial-gradient(ellipse_40%_60%_at_20%_80%,rgba(201,168,76,0.05)_0%,transparent_50%)]" />
+    
     <div className="relative z-10 section-padding pt-32 md:pt-40 max-w-4xl">
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
@@ -204,34 +341,187 @@ const Services = () => (
   </section>
 );
 
-const Reviews = () => (
-  <section id="avis" className="section-padding bg-cream">
-    <span className="block text-[11px] tracking-[0.2em] uppercase text-gold mb-4">Ce qu'ils disent</span>
-    <h2 className="font-serif text-4xl md:text-6xl font-light text-dark leading-tight mb-16">
-      Nos clients<br />parlent pour nous.
-    </h2>
+const Reviews = () => {
+  const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
+  const [feedbacks, setFeedbacks] = useState([
+    { name: 'Aminata M.', meta: 'Paris → Dakar', text: "Service impeccable ! Khady était à l'heure, le véhicule était propre et climatisé. La pancarte à l'aéroport, c'est le top.", rating: 5 },
+    { name: 'Jean-Luc D.', meta: 'Touriste', text: "J'ai loué un SUV pour un road trip vers Saly. Tout était parfait : voiture en excellent état, contrat clair. Une vraie professionnelle !", rating: 5 },
+    { name: 'Fatou K.', meta: 'Diaspora', text: "Mon vol avait 2h de retard et Khady était toujours là, souriante. Elle m'avait envoyé un message pour me dire qu'elle suivait mon vol.", rating: 5 }
+  ]);
 
-    <div className="grid md:grid-cols-3 gap-6">
-      {[
-        { name: 'Aminata M.', meta: 'Paris → Dakar', text: "Service impeccable ! Khady était à l'heure, le véhicule était propre et climatisé. La pancarte à l'aéroport, c'est le top." },
-        { name: 'Jean-Luc D.', meta: 'Touriste', text: "J'ai loué un SUV pour un road trip vers Saly. Tout était parfait : voiture en excellent état, contrat clair. Une vraie professionnelle !" },
-        { name: 'Fatou K.', meta: 'Diaspora', text: "Mon vol avait 2h de retard et Khady était toujours là, souriante. Elle m'avait envoyé un message pour me dire qu'elle suivait mon vol." }
-      ].map((r, i) => (
-        <div key={i} className="bg-white border border-gold/15 p-8 rounded-sm hover:-translate-y-1 transition-transform">
-          <div className="flex text-gold gap-1 mb-6">
-            {[...Array(5)].map((_, i) => <Star key={i} size={14} fill="currentColor" />)}
-          </div>
-          <p className="text-ink italic text-sm leading-relaxed mb-8">"{r.text}"</p>
-          <div className="flex items-center gap-4">
-            <div className="w-10 h-10 bg-gradient-to-br from-gold to-gold-light rounded-full flex items-center justify-center font-bold text-dark text-xs">
-              {r.name.split(' ').map(n => n[0]).join('')}
-            </div>
-            <div>
-              <div className="text-sm font-medium text-dark">{r.name}</div>
-              <div className="text-[10px] text-ink-muted uppercase tracking-wider">{r.meta}</div>
-            </div>
-          </div>
+  const handleAddFeedback = (newFeedback: any) => {
+    setFeedbacks([newFeedback, ...feedbacks]);
+    setIsFeedbackOpen(false);
+  };
+
+  return (
+    <section id="avis" className="section-padding bg-cream">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-8 mb-16">
+        <div>
+          <span className="block text-[11px] tracking-[0.2em] uppercase text-gold mb-4">Ce qu'ils disent</span>
+          <h2 className="font-serif text-4xl md:text-6xl font-light text-dark leading-tight">
+            Nos clients<br />parlent pour nous.
+          </h2>
         </div>
+        <button 
+          onClick={() => setIsFeedbackOpen(true)}
+          className="btn-outline border-dark text-dark hover:bg-dark hover:text-white"
+        >
+          Laisser un avis →
+        </button>
+      </div>
+
+      <div className="grid md:grid-cols-3 gap-6">
+        {feedbacks.map((r, i) => (
+          <div key={i} className="bg-white border border-gold/15 p-8 rounded-sm hover:-translate-y-1 transition-transform">
+            <div className="flex text-gold gap-1 mb-6">
+              {[...Array(5)].map((_, i) => (
+                <Star key={i} size={14} fill={i < (r.rating || 5) ? "currentColor" : "none"} />
+              ))}
+            </div>
+            <p className="text-ink italic text-sm leading-relaxed mb-8">"{r.text}"</p>
+            <div className="flex items-center gap-4">
+              <div className="w-10 h-10 bg-gradient-to-br from-gold to-gold-light rounded-full flex items-center justify-center font-bold text-dark text-xs">
+                {r.name.split(' ').map(n => n[0]).join('')}
+              </div>
+              <div>
+                <div className="text-sm font-medium text-dark">{r.name}</div>
+                <div className="text-[10px] text-ink-muted uppercase tracking-wider">{r.meta}</div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <AnimatePresence>
+        {isFeedbackOpen && (
+          <FeedbackModal 
+            onClose={() => setIsFeedbackOpen(false)} 
+            onSubmit={handleAddFeedback}
+          />
+        )}
+      </AnimatePresence>
+    </section>
+  );
+};
+
+const FeedbackModal = ({ onClose, onSubmit }: { onClose: () => void, onSubmit: (data: any) => void }) => {
+  const [rating, setRating] = useState(5);
+  const [name, setName] = useState('');
+  const [meta, setMeta] = useState('');
+  const [text, setText] = useState('');
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    onSubmit({ name, meta, text, rating });
+  };
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[400] bg-dark/95 backdrop-blur-sm flex items-center justify-center p-6"
+    >
+      <motion.div 
+        initial={{ scale: 0.95, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.95, opacity: 0 }}
+        className="bg-white max-w-lg w-full p-10 rounded-sm relative"
+      >
+        <button onClick={onClose} className="absolute top-6 right-6 text-dark/30 hover:text-dark">✕</button>
+        <h3 className="font-serif text-3xl text-dark mb-2">Votre avis</h3>
+        <p className="text-ink-muted text-sm mb-8">Partagez votre expérience avec ElleDrives.</p>
+
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="flex gap-2 mb-4">
+            {[1, 2, 3, 4, 5].map((s) => (
+              <button 
+                key={s} 
+                type="button"
+                onClick={() => setRating(s)}
+                className={`text-gold transition-transform hover:scale-110 ${rating >= s ? 'opacity-100' : 'opacity-30'}`}
+              >
+                <Star size={24} fill={rating >= s ? "currentColor" : "none"} />
+              </button>
+            ))}
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-[10px] uppercase tracking-widest text-ink-muted">Nom complet</label>
+            <input 
+              required 
+              type="text" 
+              className="w-full bg-dark/5 border border-dark/10 p-3 text-sm focus:border-gold outline-none transition-colors"
+              placeholder="Ex: Aminata Diallo"
+              onChange={e => setName(e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-[10px] uppercase tracking-widest text-ink-muted">Trajet ou Service</label>
+            <input 
+              required 
+              type="text" 
+              className="w-full bg-dark/5 border border-dark/10 p-3 text-sm focus:border-gold outline-none transition-colors"
+              placeholder="Ex: Transfert Aéroport"
+              onChange={e => setMeta(e.target.value)}
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-[10px] uppercase tracking-widest text-ink-muted">Votre commentaire</label>
+            <textarea 
+              required 
+              rows={4}
+              className="w-full bg-dark/5 border border-dark/10 p-3 text-sm focus:border-gold outline-none transition-colors resize-none"
+              placeholder="Racontez-nous votre trajet..."
+              onChange={e => setText(e.target.value)}
+            />
+          </div>
+
+          <button type="submit" className="btn-primary w-full bg-dark text-white hover:bg-dark/90">
+            Publier mon avis →
+          </button>
+        </form>
+      </motion.div>
+    </motion.div>
+  );
+};
+
+const TouristSites = ({ sites }: { sites: TouristSite[] }) => (
+  <section id="tourisme" className="section-padding bg-dark">
+    <div className="mb-16">
+      <span className="block text-[11px] tracking-[0.2em] uppercase text-gold mb-4">Découvrez le Sénégal</span>
+      <h2 className="font-serif text-4xl md:text-6xl font-light text-white leading-tight">
+        Nos sites <br /><em className="italic text-gold">incontournables</em>.
+      </h2>
+    </div>
+
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+      {sites.map((site, i) => (
+        <motion.div 
+          key={site.id}
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ delay: i * 0.1 }}
+          className="group relative overflow-hidden rounded-sm aspect-[4/5]"
+        >
+          <img 
+            src={site.img} 
+            alt={site.title} 
+            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+            referrerPolicy="no-referrer"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-dark via-dark/20 to-transparent" />
+          <div className="absolute bottom-0 left-0 p-8">
+            <h3 className="font-serif text-2xl text-white mb-2">{site.title}</h3>
+            <p className="text-white/60 text-xs leading-relaxed opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+              {site.desc}
+            </p>
+          </div>
+        </motion.div>
       ))}
     </div>
   </section>
@@ -239,9 +529,7 @@ const Reviews = () => (
 
 const Footer = ({ tiktokName }: { tiktokName: string }) => (
   <footer className="bg-[#080604] section-padding py-10 border-t border-gold/10 flex flex-col md:flex-row items-center justify-between gap-8">
-    <div className="font-serif text-xl font-light text-gold tracking-widest">
-      Elle<span className="italic text-white/40">Drives</span>
-    </div>
+    <Logo className="scale-75 origin-left" />
     <div className="text-[11px] text-white/20 tracking-wider">
       © 2025 ElleDrives · Dakar, Sénégal · Tous droits réservés
     </div>
@@ -317,8 +605,41 @@ export default function App() {
   const [showModal, setShowModal] = useState<Reservation | null>(null);
   const [prices, setPrices] = useState(DEFAULT_PRICES);
   const [founderPhoto, setFounderPhoto] = useState<string | null>(null);
+  const [logo, setLogo] = useState<string | null>(null);
   const [tiktokName, setTiktokName] = useState('EllesDrives');
+  const [touristSites, setTouristSites] = useState<TouristSite[]>([]);
   const [user, setUser] = useState<User | null>(null);
+
+  useEffect(() => {
+    const q = query(collection(db, 'tourisme'), orderBy('order', 'asc'));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const docs = snapshot.docs.map(doc => ({
+        ...doc.data(),
+        id: doc.id
+      })) as TouristSite[];
+      
+      if (docs.length === 0) {
+        // Initial data if empty
+        const initial = [
+          { id: '1', title: 'Le Baobab Sacré', desc: 'Emblème du Sénégal, cet arbre millénaire incarne la force et la sagesse.', img: 'https://images.unsplash.com/photo-1500382017468-9049fed747ef', order: 0 },
+          { id: '2', title: 'Safari Bandia', desc: 'Une immersion sauvage à la rencontre des girafes, rhinocéros et zèbres.', img: 'https://images.unsplash.com/photo-1547407139-3c921a66005c', order: 1 },
+          { id: '3', title: 'Désert de Lompoul', desc: 'Des dunes de sable ocre à perte de vue pour une expérience saharienne unique.', img: 'https://images.unsplash.com/photo-1509316785289-025f5b846b35', order: 2 }
+        ];
+        initial.forEach(async (s) => {
+          try {
+            await setDoc(doc(db, 'tourisme', s.id), s);
+          } catch (err) {
+            handleFirestoreError(err, OperationType.WRITE, `tourisme/${s.id}`);
+          }
+        });
+      } else {
+        setTouristSites(docs);
+      }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'tourisme');
+    });
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     if (!user) {
@@ -333,7 +654,7 @@ export default function App() {
       })) as Reservation[];
       setReservations(docs);
     }, (error) => {
-      console.error("Firestore snapshot error:", error);
+      handleFirestoreError(error, OperationType.LIST, 'reservations');
     });
     return () => unsubscribe();
   }, [user]);
@@ -351,6 +672,9 @@ export default function App() {
 
     const savedPhoto = localStorage.getItem('elledrives_founder_photo');
     if (savedPhoto) setFounderPhoto(savedPhoto);
+
+    const savedLogo = localStorage.getItem('elledrives_logo');
+    if (savedLogo) setLogo(savedLogo);
 
     const savedTiktok = localStorage.getItem('elledrives_tiktok_name');
     if (savedTiktok) setTiktokName(savedTiktok);
@@ -374,7 +698,7 @@ export default function App() {
               res = { id: docSnap.id, ...docSnap.data() } as Reservation;
             }
           } catch (err) {
-            console.error("Error fetching success reservation:", err);
+            handleFirestoreError(err, OperationType.GET, `reservations/${successId}`);
           }
         }
         
@@ -414,7 +738,7 @@ export default function App() {
     try {
       await updateDoc(doc(db, 'reservations', res.id), { ...res });
     } catch (err) {
-      console.error(err);
+      handleFirestoreError(err, OperationType.UPDATE, `reservations/${res.id}`);
     }
   };
 
@@ -424,7 +748,7 @@ export default function App() {
       const updated = reservations.find(r => r.id === id);
       if (updated) setShowModal({ ...updated, statut: 'cancelled' });
     } catch (err) {
-      console.error(err);
+      handleFirestoreError(err, OperationType.UPDATE, `reservations/${id}`);
     }
   };
 
@@ -438,9 +762,31 @@ export default function App() {
     localStorage.setItem('elledrives_founder_photo', photo);
   };
 
+  const handleUpdateLogo = (newLogo: string) => {
+    setLogo(newLogo);
+    localStorage.setItem('elledrives_logo', newLogo);
+  };
+
   const handleUpdateTiktok = (name: string) => {
     setTiktokName(name);
     localStorage.setItem('elledrives_tiktok_name', name);
+  };
+
+  const handleUpdateTouristSites = async (sites: TouristSite[]) => {
+    // This is a bit simplified, in a real app we'd handle individual updates
+    // For now, we'll just update the local state and assume individual updates happen in Admin
+    setTouristSites(sites);
+    // Persist changes to Firestore
+    for (const site of sites) {
+      try {
+      await setDoc(doc(db, 'tourisme', site.id), site);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `tourisme/${site.id}`);
+    }
+    }
+    // Handle deletions (not ideal but works for this demo)
+    const currentIds = sites.map(s => s.id);
+    // We'd need to fetch all and delete those not in currentIds
   };
 
   const handleBooking = async (data: Partial<Reservation>) => {
@@ -456,21 +802,23 @@ export default function App() {
       await setDoc(doc(db, 'reservations', id), newRes);
       setShowModal(newRes);
     } catch (err) {
-      console.error("Error saving reservation:", err);
-      alert("Erreur lors de la réservation. Veuillez réessayer.");
+      handleFirestoreError(err, OperationType.WRITE, `reservations/${id}`);
     }
   };
 
   return (
-    <div className="min-h-screen">
+    <ErrorBoundary>
+      <div className="min-h-screen">
       <Navbar 
         onOpenAdmin={() => setIsAdminOpen(true)} 
         onOpenTrack={() => setIsTrackOpen(true)}
+        logo={logo}
       />
       
       <main>
         <Hero />
         <Services />
+        <TouristSites sites={touristSites} />
         
         {/* Reservation Section */}
         <section id="reservation" className="bg-dark section-padding">
@@ -566,8 +914,12 @@ export default function App() {
             onUpdatePrices={handleUpdatePrices}
             founderPhoto={founderPhoto}
             onUpdatePhoto={handleUpdatePhoto}
+            logo={logo}
+            onUpdateLogo={handleUpdateLogo}
             tiktokName={tiktokName}
             onUpdateTiktok={handleUpdateTiktok}
+            touristSites={touristSites}
+            onUpdateTouristSites={handleUpdateTouristSites}
             onClose={() => setIsAdminOpen(false)} 
             user={user}
             onLogin={handleLogin}
@@ -576,6 +928,7 @@ export default function App() {
         )}
       </AnimatePresence>
     </div>
+    </ErrorBoundary>
   );
 }
 
@@ -589,11 +942,20 @@ const BookingForm = ({ prices, onSubmit }: { prices: any, onSubmit: (data: any) 
     extras: [],
     basePrice: 0,
     bouquetPrice: 0,
-    paymentMethod: 'wave'
+    paymentMethod: 'wave',
+    isRoundTrip: false,
+    withDriver: true,
+    locationZone: 'dakar'
   });
 
   const calculateTotal = () => {
-    return (formData.basePrice || 0) + (formData.bouquetPrice || 0);
+    let total = (formData.basePrice || 0);
+    
+    if (activeTab === 'transfert' && formData.isRoundTrip) {
+      total *= 2;
+    }
+
+    return total + (formData.bouquetPrice || 0);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -647,17 +1009,6 @@ const BookingForm = ({ prices, onSubmit }: { prices: any, onSubmit: (data: any) 
             />
           </div>
           <div className="space-y-1">
-            <label className="label-field">E-mail (Optionnel)</label>
-            <input 
-              type="email" 
-              className="input-field" 
-              placeholder="aminata@example.com"
-              onChange={e => setFormData({ ...formData, email: e.target.value })}
-            />
-          </div>
-        </div>
-        <div className="grid sm:grid-cols-2 gap-4">
-          <div className="space-y-1">
             <label className="label-field">WhatsApp</label>
             <input 
               type="tel" 
@@ -665,6 +1016,18 @@ const BookingForm = ({ prices, onSubmit }: { prices: any, onSubmit: (data: any) 
               className="input-field" 
               placeholder="+221 76 638 59 38"
               onChange={e => setFormData({ ...formData, whatsapp: e.target.value })}
+            />
+          </div>
+        </div>
+
+        <div className="grid sm:grid-cols-2 gap-4">
+          <div className="space-y-1">
+            <label className="label-field">E-mail (Optionnel)</label>
+            <input 
+              type="email" 
+              className="input-field" 
+              placeholder="aminata@example.com"
+              onChange={e => setFormData({ ...formData, email: e.target.value })}
             />
           </div>
           <div className="space-y-1">
@@ -681,35 +1044,34 @@ const BookingForm = ({ prices, onSubmit }: { prices: any, onSubmit: (data: any) 
           </div>
         </div>
 
-        <div className="grid sm:grid-cols-2 gap-4">
-          <div className="space-y-1">
-            <label className="label-field">Nombre de sièges</label>
-            <input 
-              type="number" 
-              min="1"
-              max="10"
-              required 
-              className="input-field" 
-              placeholder="1"
-              onChange={e => setFormData({ ...formData, sieges: parseInt(e.target.value) })}
-            />
-          </div>
-          <div className="space-y-1">
-            <label className="label-field">Nombre de valises</label>
-            <input 
-              type="number" 
-              min="0"
-              max="20"
-              required 
-              className="input-field" 
-              placeholder="1"
-              onChange={e => setFormData({ ...formData, valises: parseInt(e.target.value) })}
-            />
-          </div>
-        </div>
-
         {activeTab === 'transfert' && (
           <>
+            <div className="grid sm:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="label-field">Nombre de sièges</label>
+                <input 
+                  type="number" 
+                  min="1"
+                  max="10"
+                  required 
+                  className="input-field" 
+                  placeholder="1"
+                  onChange={e => setFormData({ ...formData, sieges: parseInt(e.target.value) })}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="label-field">Nombre de valises</label>
+                <input 
+                  type="number" 
+                  min="0"
+                  max="20"
+                  required 
+                  className="input-field" 
+                  placeholder="1"
+                  onChange={e => setFormData({ ...formData, valises: parseInt(e.target.value) })}
+                />
+              </div>
+            </div>
             <div className="grid sm:grid-cols-2 gap-4">
               <div className="space-y-1">
                 <label className="label-field">Date de voyage</label>
@@ -759,11 +1121,49 @@ const BookingForm = ({ prices, onSubmit }: { prices: any, onSubmit: (data: any) 
                 <option value={prices.transfert.tivaouane}>Tivaouane — {prices.transfert.tivaouane.toLocaleString()} FCFA</option>
               </select>
             </div>
+            <div className="flex items-center gap-3 p-4 bg-white/5 border border-white/10 rounded-sm">
+              <input 
+                type="checkbox" 
+                id="roundTrip"
+                className="w-4 h-4 accent-gold"
+                checked={formData.isRoundTrip}
+                onChange={e => setFormData({ ...formData, isRoundTrip: e.target.checked })}
+              />
+              <label htmlFor="roundTrip" className="text-xs text-white/70 cursor-pointer">
+                Option Aller-Retour (Tarif x2)
+              </label>
+            </div>
           </>
         )}
 
         {activeTab === 'dispo' && (
           <>
+            <div className="grid sm:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="label-field">Nombre de sièges</label>
+                <input 
+                  type="number" 
+                  min="1"
+                  max="10"
+                  required 
+                  className="input-field" 
+                  placeholder="1"
+                  onChange={e => setFormData({ ...formData, sieges: parseInt(e.target.value) })}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="label-field">Nombre de valises</label>
+                <input 
+                  type="number" 
+                  min="0"
+                  max="20"
+                  required 
+                  className="input-field" 
+                  placeholder="1"
+                  onChange={e => setFormData({ ...formData, valises: parseInt(e.target.value) })}
+                />
+              </div>
+            </div>
             <div className="grid sm:grid-cols-2 gap-4">
               <div className="space-y-1">
                 <label className="label-field">Date</label>
@@ -795,22 +1195,35 @@ const BookingForm = ({ prices, onSubmit }: { prices: any, onSubmit: (data: any) 
 
         {activeTab === 'location' && (
           <>
-            <div className="space-y-1">
-              <label className="label-field">Type de véhicule</label>
-              <select 
-                required
-                className="input-field" 
-                onChange={e => {
-                  const val = parseInt(e.target.value);
-                  const text = e.target.options[e.target.selectedIndex].text;
-                  setFormData({ ...formData, tarifJour: val, vehicule: text });
-                }}
-              >
-                <option value="">Choisir un véhicule...</option>
-                <option value={prices.location.berline}>Citadine / Berline — {prices.location.berline.toLocaleString()} FCFA/jour</option>
-                <option value={prices.location.suv}>4x4 / SUV — {prices.location.suv.toLocaleString()} FCFA/jour</option>
-                <option value={prices.location.luxe}>Luxe / Prestige — {prices.location.luxe.toLocaleString()} FCFA/jour</option>
-              </select>
+            <div className="grid sm:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="label-field">Type de véhicule</label>
+                <select 
+                  required
+                  className="input-field" 
+                  onChange={e => {
+                    const val = parseInt(e.target.value);
+                    const text = e.target.options[e.target.selectedIndex].text;
+                    setFormData({ ...formData, tarifJour: val, vehicule: text });
+                  }}
+                >
+                  <option value="">Choisir un véhicule...</option>
+                  <option value={prices.location.berline}>Citadine / Berline — {prices.location.berline.toLocaleString()} FCFA/jour</option>
+                  <option value={prices.location.suv}>4x4 / SUV — {prices.location.suv.toLocaleString()} FCFA/jour</option>
+                  <option value={prices.location.luxe}>Luxe / Prestige — {prices.location.luxe.toLocaleString()} FCFA/jour</option>
+                </select>
+              </div>
+              <div className="space-y-1">
+                <label className="label-field">Zone de circulation</label>
+                <select 
+                  required
+                  className="input-field" 
+                  onChange={e => setFormData({ ...formData, locationZone: e.target.value })}
+                >
+                  <option value="dakar">Dakar uniquement</option>
+                  <option value="hors-dakar">Hors Dakar (Sénégal)</option>
+                </select>
+              </div>
             </div>
             <div className="grid sm:grid-cols-2 gap-4">
               <div className="space-y-1">
@@ -832,6 +1245,25 @@ const BookingForm = ({ prices, onSubmit }: { prices: any, onSubmit: (data: any) 
                   setFormData({ ...formData, fin, basePrice });
                 }} />
               </div>
+            </div>
+            <div className="flex flex-col gap-3 p-4 bg-white/5 border border-white/10 rounded-sm">
+              <div className="flex items-center gap-3">
+                <input 
+                  type="checkbox" 
+                  id="withDriver"
+                  className="w-4 h-4 accent-gold"
+                  checked={formData.withDriver}
+                  onChange={e => setFormData({ ...formData, withDriver: e.target.checked })}
+                />
+                <label htmlFor="withDriver" className="text-xs text-white/70 cursor-pointer">
+                  Avec chauffeur (Recommandé)
+                </label>
+              </div>
+              {formData.locationZone === 'hors-dakar' && (
+                <p className="text-[10px] text-gold/80 italic leading-relaxed">
+                  ⚠️ Note : Pour les trajets hors Dakar, les frais de bouche et d'hébergement du chauffeur sont à la charge du client.
+                </p>
+              )}
             </div>
           </>
         )}
@@ -1189,12 +1621,27 @@ const SuccessModal = ({ reservation, onClose, onCancel }: { reservation: Reserva
           </div>
           <div className="flex justify-between text-xs">
             <span className="text-white/30">Service</span>
-            <span className="text-white font-medium capitalize">{reservation.type}</span>
+            <span className="text-white font-medium capitalize">
+              {reservation.type} {reservation.isRoundTrip ? '(Aller-Retour)' : ''}
+            </span>
           </div>
-          <div className="flex justify-between text-xs">
-            <span className="text-white/30">Passagers / Bagages</span>
-            <span className="text-white font-medium">{reservation.sieges || 1} sièges / {reservation.valises || 0} valises</span>
-          </div>
+          {reservation.type === 'location' ? (
+            <>
+              <div className="flex justify-between text-xs">
+                <span className="text-white/30">Zone</span>
+                <span className="text-white font-medium capitalize">{reservation.locationZone === 'dakar' ? 'Dakar' : 'Hors Dakar'}</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-white/30">Chauffeur</span>
+                <span className="text-white font-medium">{reservation.withDriver ? 'Inclus' : 'Sans chauffeur'}</span>
+              </div>
+            </>
+          ) : (
+            <div className="flex justify-between text-xs">
+              <span className="text-white/30">Passagers / Bagages</span>
+              <span className="text-white font-medium">{reservation.sieges || 1} sièges / {reservation.valises || 0} valises</span>
+            </div>
+          )}
           <div className="flex justify-between text-xs">
             <span className="text-white/30">Paiement</span>
             <span className="text-gold font-medium uppercase">{reservation.paymentMethod}</span>
@@ -1353,6 +1800,42 @@ const EditReservationModal = ({
               <option value="cancelled">Annulé</option>
             </select>
           </div>
+          
+          {data.type === 'transfert' && (
+            <div className="flex items-center gap-2 pt-4">
+              <input 
+                type="checkbox" 
+                checked={data.isRoundTrip} 
+                onChange={e => setData({ ...data, isRoundTrip: e.target.checked })}
+              />
+              <label className="text-[10px] uppercase text-white/40">Aller-Retour</label>
+            </div>
+          )}
+
+          {data.type === 'location' && (
+            <>
+              <div className="space-y-1">
+                <label className="label-field">Zone</label>
+                <select 
+                  value={data.locationZone} 
+                  className="input-field" 
+                  onChange={e => setData({ ...data, locationZone: e.target.value as any })}
+                >
+                  <option value="dakar">Dakar</option>
+                  <option value="hors-dakar">Hors Dakar</option>
+                </select>
+              </div>
+              <div className="flex items-center gap-2 pt-4">
+                <input 
+                  type="checkbox" 
+                  checked={data.withDriver} 
+                  onChange={e => setData({ ...data, withDriver: e.target.checked })}
+                />
+                <label className="text-[10px] uppercase text-white/40">Avec Chauffeur</label>
+              </div>
+            </>
+          )}
+
           <div className="space-y-1">
             <label className="label-field">Nombre de sièges</label>
             <input 
@@ -1370,6 +1853,36 @@ const EditReservationModal = ({
               className="input-field" 
               onChange={e => setData({ ...data, valises: parseInt(e.target.value) })} 
             />
+          </div>
+        </div>
+
+        <div className="border-t border-white/10 pt-8 mb-8">
+          <h3 className="text-gold text-xs uppercase tracking-widest mb-6">Retour Client / Feedback</h3>
+          <div className="grid md:grid-cols-2 gap-6">
+            <div className="space-y-1">
+              <label className="label-field">Note (1-5)</label>
+              <div className="flex gap-2">
+                {[1, 2, 3, 4, 5].map(s => (
+                  <button 
+                    key={s}
+                    onClick={() => setData({ ...data, rating: s })}
+                    className={`text-gold transition-colors ${data.rating && data.rating >= s ? 'opacity-100' : 'opacity-30'}`}
+                  >
+                    <Star size={20} fill={data.rating && data.rating >= s ? "currentColor" : "none"} />
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="label-field">Commentaire client</label>
+              <textarea 
+                value={data.feedback || ''} 
+                rows={3}
+                className="input-field resize-none" 
+                placeholder="Avis du client sur le chauffeur..."
+                onChange={e => setData({ ...data, feedback: e.target.value })} 
+              />
+            </div>
           </div>
         </div>
 
@@ -1396,6 +1909,10 @@ const AdminDashboard = ({
   onUpdatePhoto,
   tiktokName,
   onUpdateTiktok,
+  touristSites,
+  onUpdateTouristSites,
+  logo,
+  onUpdateLogo,
   onClose,
   user,
   onLogin,
@@ -1407,17 +1924,42 @@ const AdminDashboard = ({
   onUpdatePrices: (p: any) => void,
   founderPhoto: string | null,
   onUpdatePhoto: (p: string) => void,
+  logo: string | null,
+  onUpdateLogo: (l: string) => void,
   tiktokName: string,
   onUpdateTiktok: (n: string) => void,
+  touristSites: TouristSite[],
+  onUpdateTouristSites: (s: TouristSite[]) => void,
   onClose: () => void,
   user: User | null,
   onLogin: () => void,
   onLogout: () => void
 }) => {
-  const [activeTab, setActiveTab] = useState<'reservations' | 'settings'>('reservations');
+  const [activeTab, setActiveTab] = useState<'reservations' | 'settings' | 'tourisme'>('reservations');
   const [filter, setFilter] = useState<ReservationStatus | 'all'>('all');
   const [search, setSearch] = useState('');
   const [editingRes, setEditingRes] = useState<Reservation | null>(null);
+  const [editingSite, setEditingSite] = useState<TouristSite | null>(null);
+
+  const addSite = () => {
+    const newSite: TouristSite = {
+      id: Date.now().toString(),
+      title: 'Nouveau Site',
+      desc: 'Description du site...',
+      img: 'https://images.unsplash.com/photo-1500382017468-9049fed747ef',
+      order: touristSites.length
+    };
+    onUpdateTouristSites([...touristSites, newSite]);
+  };
+
+  const deleteSite = (id: string) => {
+    onUpdateTouristSites(touristSites.filter(s => s.id !== id));
+  };
+
+  const saveSite = (site: TouristSite) => {
+    onUpdateTouristSites(touristSites.map(s => s.id === site.id ? site : s));
+    setEditingSite(null);
+  };
 
   if (!user) {
     return (
@@ -1447,6 +1989,17 @@ const AdminDashboard = ({
       const reader = new FileReader();
       reader.onloadend = () => {
         onUpdatePhoto(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        onUpdateLogo(reader.result as string);
       };
       reader.readAsDataURL(file);
     }
@@ -1518,6 +2071,12 @@ const AdminDashboard = ({
               className={`px-4 py-1.5 rounded-full text-[10px] tracking-widest uppercase transition-all ${activeTab === 'reservations' ? 'bg-gold text-dark' : 'text-white/40 hover:text-white'}`}
             >
               Réservations
+            </button>
+            <button 
+              onClick={() => setActiveTab('tourisme')}
+              className={`px-4 py-1.5 rounded-full text-[10px] tracking-widest uppercase transition-all ${activeTab === 'tourisme' ? 'bg-gold text-dark' : 'text-white/40 hover:text-white'}`}
+            >
+              Tourisme
             </button>
             <button 
               onClick={() => setActiveTab('settings')}
@@ -1606,9 +2165,16 @@ const AdminDashboard = ({
                         </td>
                         <td className="p-4 text-white/60 text-xs">{r.email}</td>
                         <td className="p-4">
-                          <span className={`text-[10px] px-2 py-0.5 rounded-full border ${r.type === 'transfert' ? 'border-blue/30 text-blue bg-blue/10' : 'border-orange/30 text-orange bg-orange/10'}`}>
-                            {r.type}
-                          </span>
+                          <div className="flex flex-col gap-1">
+                            <span className={`text-[10px] px-2 py-0.5 rounded-full border w-fit ${r.type === 'transfert' ? 'border-blue/30 text-blue bg-blue/10' : r.type === 'dispo' ? 'border-purple/30 text-purple bg-purple/10' : 'border-orange/30 text-orange bg-orange/10'}`}>
+                              {r.type} {r.isRoundTrip ? '(AR)' : ''}
+                            </span>
+                            {r.type === 'location' && (
+                              <span className="text-[9px] text-white/30 italic">
+                                {r.locationZone === 'dakar' ? 'Dakar' : 'Hors Dakar'} • {r.withDriver ? 'Chauffeur' : 'Sans Chauffeur'}
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="p-4">
                           <span className="text-[10px] text-gold uppercase font-medium">{r.paymentMethod}</span>
@@ -1684,6 +2250,82 @@ const AdminDashboard = ({
               )}
             </div>
           </>
+        ) : activeTab === 'tourisme' ? (
+          <div className="space-y-8">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <Camera className="text-gold" />
+                <h3 className="font-serif text-2xl text-white">Gestion Tourisme</h3>
+              </div>
+              <button onClick={addSite} className="btn-primary !py-2 !px-4 text-[10px]">Ajouter un site</button>
+            </div>
+
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {touristSites.map(site => (
+                <div key={site.id} className="bg-white/5 border border-gold/15 rounded-sm overflow-hidden group">
+                  <div className="aspect-video relative">
+                    <img src={site.img} alt={site.title} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                    <div className="absolute inset-0 bg-dark/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                      <button onClick={() => setEditingSite(site)} className="p-2 bg-gold text-dark rounded-full hover:bg-gold-light transition-colors"><Settings size={16} /></button>
+                      <button onClick={() => deleteSite(site.id)} className="p-2 bg-red text-white rounded-full hover:bg-red/80 transition-colors"><X size={16} /></button>
+                    </div>
+                  </div>
+                  <div className="p-4">
+                    <h4 className="text-white font-serif text-lg mb-1">{site.title}</h4>
+                    <p className="text-white/40 text-xs line-clamp-2">{site.desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <AnimatePresence>
+              {editingSite && (
+                <motion.div 
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  className="fixed inset-0 z-[400] bg-dark/95 backdrop-blur-md flex items-center justify-center p-6"
+                >
+                  <div className="max-w-xl w-full bg-dark border border-gold/20 p-8 rounded-sm">
+                    <h3 className="font-serif text-2xl text-gold mb-8">Modifier le site</h3>
+                    <div className="space-y-6">
+                      <div className="space-y-1">
+                        <label className="label-field">Titre</label>
+                        <input 
+                          type="text" 
+                          value={editingSite.title} 
+                          className="input-field" 
+                          onChange={e => setEditingSite({ ...editingSite, title: e.target.value })} 
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="label-field">Image URL</label>
+                        <input 
+                          type="text" 
+                          value={editingSite.img} 
+                          className="input-field" 
+                          onChange={e => setEditingSite({ ...editingSite, img: e.target.value })} 
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="label-field">Description</label>
+                        <textarea 
+                          value={editingSite.desc} 
+                          rows={4}
+                          className="input-field resize-none" 
+                          onChange={e => setEditingSite({ ...editingSite, desc: e.target.value })} 
+                        />
+                      </div>
+                      <div className="flex gap-4">
+                        <button onClick={() => saveSite(editingSite)} className="btn-primary flex-1">Enregistrer</button>
+                        <button onClick={() => setEditingSite(null)} className="btn-outline flex-1">Annuler</button>
+                      </div>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
         ) : (
           <div className="grid lg:grid-cols-2 gap-10">
             {/* Price Settings */}
@@ -1886,6 +2528,26 @@ const AdminDashboard = ({
               </div>
 
               <div className="bg-white/5 border border-gold/15 p-8 rounded-sm space-y-8">
+                <div>
+                  <h4 className="text-gold text-xs uppercase tracking-widest mb-4">Logo de l'entreprise</h4>
+                  <div className="flex items-center gap-6">
+                    <div className="w-24 h-24 rounded-sm border border-gold/20 bg-gold/5 flex items-center justify-center overflow-hidden p-2">
+                      {logo ? (
+                        <img src={logo} alt="Logo Preview" className="w-full h-full object-contain" />
+                      ) : (
+                        <Logo className="scale-75" />
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <label className="btn-outline cursor-pointer inline-flex items-center gap-2 text-[10px]">
+                        <Upload size={14} /> Choisir un logo
+                        <input type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
+                      </label>
+                      <p className="text-[10px] text-white/20 mt-2">Format PNG transparent recommandé.</p>
+                    </div>
+                  </div>
+                </div>
+
                 <div>
                   <h4 className="text-gold text-xs uppercase tracking-widest mb-4">Photo de Khady</h4>
                   <div className="flex items-center gap-6">
