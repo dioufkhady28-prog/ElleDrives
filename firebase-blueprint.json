@@ -1,0 +1,31 @@
+{
+  "entities": {
+    "Reservation": {
+      "title": "Reservation",
+      "description": "A booking for a transport service",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "nom": { "type": "string" },
+        "email": { "type": "string" },
+        "whatsapp": { "type": "string" },
+        "type": { "type": "string" },
+        "date": { "type": "string" },
+        "heure": { "type": "string" },
+        "montant": { "type": "number" },
+        "sieges": { "type": "number" },
+        "valises": { "type": "number" },
+        "paymentMethod": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "paid", "confirmed", "cancelled"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "nom", "whatsapp", "type", "montant", "status"]
+    }
+  },
+  "firestore": {
+    "reservations/{reservationId}": {
+      "schema": "Reservation",
+      "description": "Collection of all transport bookings"
+    }
+  }
+}

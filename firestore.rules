@@ -1,0 +1,30 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          (request.auth.token.email == "dioufkhady28@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    match /reservations/{reservationId} {
+      // Allow anyone to create a reservation
+      allow create: if true;
+      
+      // Allow reading if you know the ID (for success page and tracking)
+      allow get: if true;
+      
+      // Allow listing and updates only for admins
+      allow list, update, delete: if isAdmin();
+    }
+
+    match /users/{userId} {
+      allow read, write: if isAuthenticated() && request.auth.uid == userId;
+    }
+  }
+}

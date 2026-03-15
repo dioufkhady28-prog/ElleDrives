@@ -1,0 +1,54 @@
+@import "tailwindcss";
+
+@theme {
+  --color-gold: #C9A84C;
+  --color-gold-light: #E8C97A;
+  --color-cream: #FAF6EE;
+  --color-dark: #0E0B07;
+  --color-dark2: #1A1510;
+  --color-ink: #3A3020;
+  --color-ink-muted: #8A7A60;
+
+  --font-serif: "Cormorant Garamond", serif;
+  --font-sans: "DM Sans", sans-serif;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply font-sans bg-cream text-ink overflow-x-hidden;
+  }
+}
+
+@layer components {
+  .section-padding {
+    @apply py-16 px-6 md:py-24 md:px-16;
+  }
+  
+  .btn-primary {
+    @apply bg-gold text-dark px-8 py-3.5 font-medium tracking-wider uppercase rounded-sm transition-all duration-300 hover:bg-gold-light hover:-translate-y-0.5 hover:shadow-lg hover:shadow-gold/30 active:translate-y-0;
+  }
+
+  .btn-outline {
+    @apply bg-transparent text-white/80 px-8 py-3.5 border border-white/25 font-medium tracking-wider uppercase rounded-sm transition-all duration-300 hover:border-gold hover:text-gold hover:-translate-y-0.5 active:translate-y-0;
+  }
+
+  .input-field {
+    @apply w-full bg-white/5 border border-gold/20 text-white px-4 py-3 rounded-sm outline-none transition-all duration-300 focus:border-gold focus:bg-gold/5 placeholder:text-white/20;
+  }
+
+  .label-field {
+    @apply block text-[10px] tracking-widest uppercase text-white/40 mb-2;
+  }
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.8s ease forwards;
+}
