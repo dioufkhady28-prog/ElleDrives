@@ -1,5 +1,12 @@
 import React, { useState, useEffect, Component, ReactNode } from 'react';
-import { Reservation, ReservationType, ReservationStatus, TouristSite } from './types';
+import { 
+  Reservation, 
+  ReservationType, 
+  ReservationStatus, 
+  TouristSite,
+  ServiceItem,
+  ReviewItem 
+} from './types';
 import { db, auth } from './firebase';
 import { 
   collection, 
@@ -163,7 +170,7 @@ const Logo = ({ className = "", src = null }: { className?: string, src?: string
         </>
       )}
     </div>
-    <div className="flex flex-col">
+    <div className="flex flex-col" translate="no">
       <span className="font-serif text-2xl font-light text-gold tracking-widest leading-none">
         Elle<span className="italic text-white">Drives</span>
       </span>
@@ -223,18 +230,18 @@ const Navbar = ({ onOpenAdmin, onOpenTrack, logo }: { onOpenAdmin: () => void, o
   );
 };
 
-const Hero = () => (
+const Hero = ({ image, title, subtitle }: { image: string, title: string, subtitle: string }) => (
   <section className="relative min-h-screen bg-dark flex items-center overflow-hidden">
     {/* Background Image - Baobab */}
     <div className="absolute inset-0 z-0">
       <img 
-        src="https://images.unsplash.com/photo-1500382017468-9049fed747ef?q=80&w=2070&auto=format&fit=crop" 
+        src={image} 
         alt="Baobab Sénégal" 
-        className="w-full h-full object-cover opacity-50"
+        className="w-full h-full object-cover opacity-60"
         referrerPolicy="no-referrer"
       />
       <div className="absolute inset-0 bg-gradient-to-r from-dark via-dark/70 to-transparent" />
-      <div className="absolute inset-0 bg-black/20" />
+      <div className="absolute inset-0 bg-black/40" />
     </div>
 
     <div className="absolute inset-0 bg-[radial-gradient(ellipse_60%_80%_at_70%_50%,rgba(201,168,76,0.08)_0%,transparent_60%),radial-gradient(ellipse_40%_60%_at_20%_80%,rgba(201,168,76,0.05)_0%,transparent_50%)]" />
@@ -246,16 +253,27 @@ const Hero = () => (
         transition={{ duration: 0.8, delay: 0.2 }}
         className="inline-flex items-center gap-2 bg-gold/10 border border-gold/30 text-gold text-[10px] tracking-[0.2em] uppercase px-4 py-1.5 rounded-full mb-8"
       >
-        🇸🇳 Service Premium — Dakar & Environs
+        {subtitle}
       </motion.div>
       
       <motion.h1 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.8, delay: 0.4 }}
-        className="font-serif text-5xl md:text-8xl font-light text-white leading-[1.1] mb-8"
+        className="font-serif text-5xl md:text-8xl font-light text-white leading-[1.1] mb-8 whitespace-pre-line"
       >
-        Plus qu'un trajet,<br />une <em className="italic text-gold">relation</em><br />de confiance.
+        {title.split('\n').map((line, i) => (
+          <span key={i}>
+            {line.includes('relation') ? (
+              <>
+                {line.split('relation')[0]}
+                <em className="italic text-gold">relation</em>
+                {line.split('relation')[1]}
+              </>
+            ) : line}
+            <br />
+          </span>
+        ))}
       </motion.h1>
 
       <motion.p 
@@ -300,7 +318,7 @@ const Hero = () => (
   </section>
 );
 
-const Services = () => (
+const Services = ({ items }: { items: ServiceItem[] }) => (
   <section id="services" className="section-padding bg-cream">
     <span className="block text-[11px] tracking-[0.2em] uppercase text-gold mb-4">Ce que nous offrons</span>
     <h2 className="font-serif text-4xl md:text-6xl font-light text-dark leading-tight mb-16">
@@ -308,29 +326,10 @@ const Services = () => (
     </h2>
 
     <div className="grid md:grid-cols-3 gap-px bg-gold/15 border border-gold/15">
-      {[
-        { 
-          icon: <Plane className="text-gold" />, 
-          title: 'Transfert Aéroport', 
-          desc: 'Accueil personnalisé avec pancarte à l\'AIBD. Suivi de vol en temps réel — pas de supplément en cas de retard.',
-          price: 'À partir de 20 000 FCFA'
-        },
-        { 
-          icon: <Clock className="text-gold" />, 
-          title: 'Mise à Disposition', 
-          desc: 'Un véhicule avec chauffeuse à votre service pour vos courses ou événements. Demi-journée ou journée complète.',
-          price: 'À partir de 40 000 FCFA / 4h'
-        },
-        { 
-          icon: <Key className="text-gold" />, 
-          title: 'Location de Voiture', 
-          desc: 'Berlines, SUV et véhicules prestige à la location journalière. Flotte entretenue avec soin. Caution requise.',
-          price: 'À partir de 30 000 FCFA / jour'
-        }
-      ].map((s, i) => (
+      {items.map((s, i) => (
         <div key={i} className="group bg-white p-10 transition-all duration-500 hover:bg-dark hover:-translate-y-1">
           <div className="w-14 h-14 bg-gold/10 rounded-full flex items-center justify-center mb-8 group-hover:bg-gold/20 transition-colors">
-            {s.icon}
+            {s.icon === 'plane' ? <Plane className="text-gold" /> : s.icon === 'clock' ? <Clock className="text-gold" /> : <Key className="text-gold" />}
           </div>
           <h3 className="font-serif text-2xl text-dark mb-4 group-hover:text-gold transition-colors">{s.title}</h3>
           <p className="text-ink-muted text-sm leading-relaxed mb-8 group-hover:text-white/60 transition-colors">{s.desc}</p>
@@ -341,13 +340,13 @@ const Services = () => (
   </section>
 );
 
-const Reviews = () => {
+const Reviews = ({ items }: { items: ReviewItem[] }) => {
   const [isFeedbackOpen, setIsFeedbackOpen] = useState(false);
-  const [feedbacks, setFeedbacks] = useState([
-    { name: 'Aminata M.', meta: 'Paris → Dakar', text: "Service impeccable ! Khady était à l'heure, le véhicule était propre et climatisé. La pancarte à l'aéroport, c'est le top.", rating: 5 },
-    { name: 'Jean-Luc D.', meta: 'Touriste', text: "J'ai loué un SUV pour un road trip vers Saly. Tout était parfait : voiture en excellent état, contrat clair. Une vraie professionnelle !", rating: 5 },
-    { name: 'Fatou K.', meta: 'Diaspora', text: "Mon vol avait 2h de retard et Khady était toujours là, souriante. Elle m'avait envoyé un message pour me dire qu'elle suivait mon vol.", rating: 5 }
-  ]);
+  const [feedbacks, setFeedbacks] = useState(items);
+
+  useEffect(() => {
+    setFeedbacks(items);
+  }, [items]);
 
   const handleAddFeedback = (newFeedback: any) => {
     setFeedbacks([newFeedback, ...feedbacks]);
@@ -431,7 +430,7 @@ const FeedbackModal = ({ onClose, onSubmit }: { onClose: () => void, onSubmit: (
       >
         <button onClick={onClose} className="absolute top-6 right-6 text-dark/30 hover:text-dark">✕</button>
         <h3 className="font-serif text-3xl text-dark mb-2">Votre avis</h3>
-        <p className="text-ink-muted text-sm mb-8">Partagez votre expérience avec ElleDrives.</p>
+        <p className="text-ink-muted text-sm mb-8">Partagez votre expérience avec <span translate="no">ElleDrives</span>.</p>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="flex gap-2 mb-4">
@@ -527,11 +526,15 @@ const TouristSites = ({ sites }: { sites: TouristSite[] }) => (
   </section>
 );
 
-const Footer = ({ tiktokName }: { tiktokName: string }) => (
+const Footer = ({ tiktokName, logo }: { tiktokName: string, logo: string | null }) => (
   <footer className="bg-[#080604] section-padding py-10 border-t border-gold/10 flex flex-col md:flex-row items-center justify-between gap-8">
-    <Logo className="scale-75 origin-left" />
+    {logo ? (
+      <img src={logo} alt="Logo" className="h-12 object-contain" />
+    ) : (
+      <Logo className="scale-75 origin-left" />
+    )}
     <div className="text-[11px] text-white/20 tracking-wider">
-      © 2025 ElleDrives · Dakar, Sénégal · Tous droits réservés
+      © 2025 <span translate="no">ElleDrives</span> · Dakar, Sénégal · Tous droits réservés
     </div>
     <div className="flex gap-4">
       <a href="https://www.facebook.com/share/1BEHgAMwgr/?mibextid=wwXlfr" target="_blank" rel="noopener noreferrer" className="w-9 h-9 border border-white/10 rounded-full flex items-center justify-center text-white/40 hover:border-gold hover:text-gold transition-all">
@@ -598,6 +601,36 @@ const DEFAULT_PRICES = {
   }
 };
 
+const DEFAULT_SERVICES: ServiceItem[] = [
+  { 
+    id: '1',
+    icon: 'plane', 
+    title: 'Transfert Aéroport', 
+    desc: 'Accueil personnalisé avec pancarte à l\'AIBD. Suivi de vol en temps réel — pas de supplément en cas de retard.',
+    price: 'À partir de 20 000 FCFA'
+  },
+  { 
+    id: '2',
+    icon: 'clock', 
+    title: 'Mise à Disposition', 
+    desc: 'Un véhicule avec chauffeuse à votre service pour vos courses ou événements. Demi-journée ou journée complète.',
+    price: 'À partir de 40 000 FCFA / 4h'
+  },
+  { 
+    id: '3',
+    icon: 'key', 
+    title: 'Location de Voiture', 
+    desc: 'Berlines, SUV et véhicules prestige à la location journalière. Flotte entretenue avec soin. Caution requise.',
+    price: 'À partir de 30 000 FCFA / jour'
+  }
+];
+
+const DEFAULT_REVIEWS: ReviewItem[] = [
+  { id: '1', name: 'Aminata M.', meta: 'Paris → Dakar', text: "Service impeccable ! Khady était à l'heure, le véhicule était propre et climatisé. La pancarte à l'aéroport, c'est le top.", rating: 5 },
+  { id: '2', name: 'Jean-Luc D.', meta: 'Touriste', text: "J'ai loué un SUV pour un road trip vers Saly. Tout était parfait : voiture en excellent état, contrat clair. Une vraie professionnelle !", rating: 5 },
+  { id: '3', name: 'Fatou K.', meta: 'Diaspora', text: "Mon vol avait 2h de retard et Khady était toujours là, souriante. Elle m'avait envoyer un message pour me dire qu'elle suivait mon vol.", rating: 5 }
+];
+
 export default function App() {
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [isTrackOpen, setIsTrackOpen] = useState(false);
@@ -606,6 +639,11 @@ export default function App() {
   const [prices, setPrices] = useState(DEFAULT_PRICES);
   const [founderPhoto, setFounderPhoto] = useState<string | null>(null);
   const [logo, setLogo] = useState<string | null>(null);
+  const [heroImage, setHeroImage] = useState<string>('https://pepiniere.sn/wp-content/uploads/2025/03/baobab.webp');
+  const [heroTitle, setHeroTitle] = useState<string>("Plus qu'un trajet,\nune relation\nde confiance.");
+  const [heroSubtitle, setHeroSubtitle] = useState<string>("🇸🇳 Service Premium — Dakar & Environs");
+  const [services, setServices] = useState<ServiceItem[]>(DEFAULT_SERVICES);
+  const [reviews, setReviews] = useState<ReviewItem[]>(DEFAULT_REVIEWS);
   const [tiktokName, setTiktokName] = useState('EllesDrives');
   const [touristSites, setTouristSites] = useState<TouristSite[]>([]);
   const [user, setUser] = useState<User | null>(null);
@@ -675,6 +713,21 @@ export default function App() {
 
     const savedLogo = localStorage.getItem('elledrives_logo');
     if (savedLogo) setLogo(savedLogo);
+
+    const savedHero = localStorage.getItem('elledrives_hero_image');
+    if (savedHero) setHeroImage(savedHero);
+
+    const savedHeroTitle = localStorage.getItem('elledrives_hero_title');
+    if (savedHeroTitle) setHeroTitle(savedHeroTitle);
+
+    const savedHeroSubtitle = localStorage.getItem('elledrives_hero_subtitle');
+    if (savedHeroSubtitle) setHeroSubtitle(savedHeroSubtitle);
+
+    const savedServices = localStorage.getItem('elledrives_services');
+    if (savedServices) setServices(JSON.parse(savedServices));
+
+    const savedReviews = localStorage.getItem('elledrives_reviews');
+    if (savedReviews) setReviews(JSON.parse(savedReviews));
 
     const savedTiktok = localStorage.getItem('elledrives_tiktok_name');
     if (savedTiktok) setTiktokName(savedTiktok);
@@ -767,6 +820,28 @@ export default function App() {
     localStorage.setItem('elledrives_logo', newLogo);
   };
 
+  const handleUpdateHero = (newHero: string) => {
+    setHeroImage(newHero);
+    localStorage.setItem('elledrives_hero_image', newHero);
+  };
+
+  const handleUpdateHeroText = (title: string, subtitle: string) => {
+    setHeroTitle(title);
+    setHeroSubtitle(subtitle);
+    localStorage.setItem('elledrives_hero_title', title);
+    localStorage.setItem('elledrives_hero_subtitle', subtitle);
+  };
+
+  const handleUpdateServices = (newServices: ServiceItem[]) => {
+    setServices(newServices);
+    localStorage.setItem('elledrives_services', JSON.stringify(newServices));
+  };
+
+  const handleUpdateReviews = (newReviews: ReviewItem[]) => {
+    setReviews(newReviews);
+    localStorage.setItem('elledrives_reviews', JSON.stringify(newReviews));
+  };
+
   const handleUpdateTiktok = (name: string) => {
     setTiktokName(name);
     localStorage.setItem('elledrives_tiktok_name', name);
@@ -816,8 +891,8 @@ export default function App() {
       />
       
       <main>
-        <Hero />
-        <Services />
+        <Hero image={heroImage} title={heroTitle} subtitle={heroSubtitle} />
+        <Services items={services} />
         <TouristSites sites={touristSites} />
         
         {/* Reservation Section */}
@@ -853,7 +928,7 @@ export default function App() {
 
         <Tarifs prices={prices} />
         <About photo={founderPhoto} tiktokName={tiktokName} />
-        <Reviews />
+        <Reviews items={reviews} />
         
         {/* Contact Section */}
         <section id="contact" className="bg-dark section-padding text-center">
@@ -865,7 +940,7 @@ export default function App() {
             {[
               { icon: <MessageCircle />, title: 'WhatsApp', info: 'Disponible 24h/24', link: '+221 76 638 59 38', url: 'https://wa.me/221766385938' },
               { icon: <Music2 />, title: 'TikTok', info: 'Suivez-nous', link: tiktokName, url: `https://www.tiktok.com/@${tiktokName.replace('@', '')}` },
-              { icon: <Facebook />, title: 'Facebook', info: 'Notre page', link: 'ElleDrives Sénégal', url: 'https://www.facebook.com/share/1BEHgAMwgr/?mibextid=wwXlfr' }
+              { icon: <Facebook />, title: 'Facebook', info: 'Notre page', link: <span translate="no">ElleDrives Sénégal</span>, url: 'https://www.facebook.com/share/1BEHgAMwgr/?mibextid=wwXlfr' }
             ].map((c, i) => (
               <a key={i} href={c.url} target="_blank" rel="noopener noreferrer" className="bg-white/5 border border-gold/20 p-10 rounded-sm hover:border-gold transition-colors block">
                 <div className="text-gold flex justify-center mb-6">{c.icon}</div>
@@ -878,7 +953,7 @@ export default function App() {
         </section>
       </main>
 
-      <Footer tiktokName={tiktokName} />
+      <Footer tiktokName={tiktokName} logo={logo} />
 
       {/* WhatsApp Float */}
       <a 
@@ -916,6 +991,15 @@ export default function App() {
             onUpdatePhoto={handleUpdatePhoto}
             logo={logo}
             onUpdateLogo={handleUpdateLogo}
+            heroImage={heroImage}
+            onUpdateHero={handleUpdateHero}
+            heroTitle={heroTitle}
+            heroSubtitle={heroSubtitle}
+            onUpdateHeroText={handleUpdateHeroText}
+            services={services}
+            onUpdateServices={handleUpdateServices}
+            reviews={reviews}
+            onUpdateReviews={handleUpdateReviews}
             tiktokName={tiktokName}
             onUpdateTiktok={handleUpdateTiktok}
             touristSites={touristSites}
@@ -1461,11 +1545,11 @@ const About = ({ photo, tiktokName }: { photo: string | null, tiktokName: string
     <div className="section-padding flex flex-col justify-center">
       <span className="text-[11px] tracking-[0.2em] uppercase text-gold mb-4">Notre histoire</span>
       <h2 className="font-serif text-4xl md:text-6xl font-light text-white leading-tight mb-8">
-        L'Expérience<br /><em className="italic text-gold">ElleDrives</em>
+        L'Expérience<br /><em className="italic text-gold" translate="no">ElleDrives</em>
       </h2>
       <p className="text-white/60 text-base leading-relaxed mb-6">
-        Bienvenue chez ElleDrives, le service de transport qui redéfinit la mobilité au Sénégal. 
-        Fondé par Khady Diouf, ElleDrives est né d'une vision simple : offrir un service premium, 
+        Bienvenue chez <span translate="no">ElleDrives</span>, le service de transport qui redéfinit la mobilité au Sénégal. 
+        Fondé par Khady Diouf, <span translate="no">ElleDrives</span> est né d'une vision simple : offrir un service premium, 
         ponctuel et d'une sérénité absolue.
       </p>
       
@@ -1913,6 +1997,15 @@ const AdminDashboard = ({
   onUpdateTouristSites,
   logo,
   onUpdateLogo,
+  heroImage,
+  onUpdateHero,
+  heroTitle,
+  heroSubtitle,
+  onUpdateHeroText,
+  services,
+  onUpdateServices,
+  reviews,
+  onUpdateReviews,
   onClose,
   user,
   onLogin,
@@ -1926,6 +2019,15 @@ const AdminDashboard = ({
   onUpdatePhoto: (p: string) => void,
   logo: string | null,
   onUpdateLogo: (l: string) => void,
+  heroImage: string,
+  onUpdateHero: (h: string) => void,
+  heroTitle: string,
+  heroSubtitle: string,
+  onUpdateHeroText: (t: string, s: string) => void,
+  services: ServiceItem[],
+  onUpdateServices: (s: ServiceItem[]) => void,
+  reviews: ReviewItem[],
+  onUpdateReviews: (r: ReviewItem[]) => void,
   tiktokName: string,
   onUpdateTiktok: (n: string) => void,
   touristSites: TouristSite[],
@@ -1935,7 +2037,7 @@ const AdminDashboard = ({
   onLogin: () => void,
   onLogout: () => void
 }) => {
-  const [activeTab, setActiveTab] = useState<'reservations' | 'settings' | 'tourisme'>('reservations');
+  const [activeTab, setActiveTab] = useState<'reservations' | 'settings' | 'tourisme' | 'content'>('reservations');
   const [filter, setFilter] = useState<ReservationStatus | 'all'>('all');
   const [search, setSearch] = useState('');
   const [editingRes, setEditingRes] = useState<Reservation | null>(null);
@@ -2005,6 +2107,17 @@ const AdminDashboard = ({
     }
   };
 
+  const handleHeroUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        onUpdateHero(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const updateStatus = (id: string, status: ReservationStatus) => {
     const res = reservations.find(r => r.id === id);
     if (res) {
@@ -2034,7 +2147,7 @@ const AdminDashboard = ({
         <div className="max-w-md w-full bg-dark2 border border-gold/20 p-10 rounded-lg text-center">
           <div className="text-4xl mb-6">🔐</div>
           <h2 className="font-serif text-2xl text-white mb-2">Espace Khady</h2>
-          <p className="text-white/40 text-sm mb-8">Accès réservé à l'administratrice d'ElleDrives</p>
+          <p className="text-white/40 text-sm mb-8">Accès réservé à l'administratrice d'<span translate="no">ElleDrives</span></p>
           <button onClick={onLogin} className="btn-primary w-full mb-6 flex items-center justify-center gap-3">
             <Settings size={20} /> Se connecter avec Google
           </button>
@@ -2063,7 +2176,7 @@ const AdminDashboard = ({
       </AnimatePresence>
 
       <div className="sticky top-0 z-10 bg-dark2 border-b border-gold/20 px-6 py-4 flex items-center justify-between">
-        <div className="font-serif text-xl text-gold">ElleDrives <span className="italic text-white/40 text-sm">Dashboard</span></div>
+        <div className="font-serif text-xl text-gold" translate="no">ElleDrives <span className="italic text-white/40 text-sm">Dashboard</span></div>
         <div className="flex items-center gap-4">
           <div className="flex bg-white/5 rounded-full p-1 border border-white/10">
             <button 
@@ -2077,6 +2190,12 @@ const AdminDashboard = ({
               className={`px-4 py-1.5 rounded-full text-[10px] tracking-widest uppercase transition-all ${activeTab === 'tourisme' ? 'bg-gold text-dark' : 'text-white/40 hover:text-white'}`}
             >
               Tourisme
+            </button>
+            <button 
+              onClick={() => setActiveTab('content')}
+              className={`px-4 py-1.5 rounded-full text-[10px] tracking-widest uppercase transition-all ${activeTab === 'content' ? 'bg-gold text-dark' : 'text-white/40 hover:text-white'}`}
+            >
+              Contenu
             </button>
             <button 
               onClick={() => setActiveTab('settings')}
@@ -2326,8 +2445,197 @@ const AdminDashboard = ({
               )}
             </AnimatePresence>
           </div>
+        ) : activeTab === 'content' ? (
+          <div className="space-y-12 animate-fade-up">
+            {/* Hero Section */}
+            <div className="space-y-8">
+              <div className="flex items-center gap-3 mb-6">
+                <Camera className="text-gold" />
+                <h3 className="font-serif text-2xl text-white">Section Accueil (Hero)</h3>
+              </div>
+
+              <div className="bg-white/5 border border-gold/15 p-8 rounded-sm space-y-8">
+                <div>
+                  <h4 className="text-gold text-xs uppercase tracking-widest mb-4">Image d'arrière-plan</h4>
+                  <div className="flex flex-col gap-4">
+                    <div className="aspect-video w-full rounded-sm border border-gold/20 bg-gold/5 flex items-center justify-center overflow-hidden">
+                      <img src={heroImage} alt="Hero Preview" className="w-full h-full object-cover" />
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <label className="btn-outline cursor-pointer inline-flex items-center gap-2 text-[10px] flex-1 justify-center">
+                        <Upload size={14} /> Charger une image
+                        <input type="file" accept="image/*" className="hidden" onChange={handleHeroUpload} />
+                      </label>
+                      <button 
+                        onClick={() => onUpdateHero('https://pepiniere.sn/wp-content/uploads/2025/03/baobab.webp')}
+                        className="text-[10px] text-white/40 hover:text-gold transition-colors"
+                      >
+                        Réinitialiser (Baobab)
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-white/40 uppercase">Slogan (Badge)</label>
+                    <input 
+                      type="text" 
+                      value={heroSubtitle} 
+                      className="input-field" 
+                      onChange={e => onUpdateHeroText(heroTitle, e.target.value)} 
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-white/40 uppercase">Titre Principal (Utilisez \n pour les retours à la ligne)</label>
+                    <textarea 
+                      value={heroTitle} 
+                      rows={3}
+                      className="input-field resize-none" 
+                      onChange={e => onUpdateHeroText(e.target.value, heroSubtitle)} 
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Services Section */}
+            <div className="space-y-8">
+              <div className="flex items-center gap-3 mb-6">
+                <Settings className="text-gold" />
+                <h3 className="font-serif text-2xl text-white">Nos Services</h3>
+              </div>
+
+              <div className="grid md:grid-cols-3 gap-6">
+                {services.map((s, idx) => (
+                  <div key={s.id} className="bg-white/5 border border-gold/15 p-6 rounded-sm space-y-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-gold text-[10px] uppercase tracking-widest">Service {idx + 1}</span>
+                      <div className="flex items-center gap-2">
+                        <select 
+                          value={s.icon} 
+                          className="bg-dark border border-gold/20 text-white text-[10px] rounded p-1"
+                          onChange={e => {
+                            const updated = [...services];
+                            updated[idx] = { ...s, icon: e.target.value as any };
+                            onUpdateServices(updated);
+                          }}
+                        >
+                          <option value="plane">Avion</option>
+                          <option value="clock">Horloge</option>
+                          <option value="key">Clé</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div className="space-y-3">
+                      <input 
+                        type="text" 
+                        value={s.title} 
+                        className="input-field text-sm" 
+                        placeholder="Titre"
+                        onChange={e => {
+                          const updated = [...services];
+                          updated[idx] = { ...s, title: e.target.value };
+                          onUpdateServices(updated);
+                        }}
+                      />
+                      <textarea 
+                        value={s.desc} 
+                        rows={3}
+                        className="input-field text-xs resize-none" 
+                        placeholder="Description"
+                        onChange={e => {
+                          const updated = [...services];
+                          updated[idx] = { ...s, desc: e.target.value };
+                          onUpdateServices(updated);
+                        }}
+                      />
+                      <input 
+                        type="text" 
+                        value={s.price} 
+                        className="input-field text-xs" 
+                        placeholder="Prix (ex: À partir de...)"
+                        onChange={e => {
+                          const updated = [...services];
+                          updated[idx] = { ...s, price: e.target.value };
+                          onUpdateServices(updated);
+                        }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Reviews Section */}
+            <div className="space-y-8">
+              <div className="flex items-center gap-3 mb-6">
+                <Star className="text-gold" />
+                <h3 className="font-serif text-2xl text-white">Avis Clients</h3>
+              </div>
+
+              <div className="grid md:grid-cols-3 gap-6">
+                {reviews.map((r, idx) => (
+                  <div key={r.id} className="bg-white/5 border border-gold/15 p-6 rounded-sm space-y-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-gold text-[10px] uppercase tracking-widest">Avis {idx + 1}</span>
+                      <div className="flex items-center gap-1">
+                        {[1, 2, 3, 4, 5].map(star => (
+                          <button 
+                            key={star}
+                            onClick={() => {
+                              const updated = [...reviews];
+                              updated[idx] = { ...r, rating: star };
+                              onUpdateReviews(updated);
+                            }}
+                          >
+                            <Star size={10} className={star <= r.rating ? "fill-gold text-gold" : "text-white/20"} />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="space-y-3">
+                      <input 
+                        type="text" 
+                        value={r.name} 
+                        className="input-field text-sm" 
+                        placeholder="Nom"
+                        onChange={e => {
+                          const updated = [...reviews];
+                          updated[idx] = { ...r, name: e.target.value };
+                          onUpdateReviews(updated);
+                        }}
+                      />
+                      <input 
+                        type="text" 
+                        value={r.meta} 
+                        className="input-field text-xs" 
+                        placeholder="Méta (ex: Paris → Dakar)"
+                        onChange={e => {
+                          const updated = [...reviews];
+                          updated[idx] = { ...r, meta: e.target.value };
+                          onUpdateReviews(updated);
+                        }}
+                      />
+                      <textarea 
+                        value={r.text} 
+                        rows={4}
+                        className="input-field text-xs resize-none" 
+                        placeholder="Commentaire"
+                        onChange={e => {
+                          const updated = [...reviews];
+                          updated[idx] = { ...r, text: e.target.value };
+                          onUpdateReviews(updated);
+                        }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
         ) : (
-          <div className="grid lg:grid-cols-2 gap-10">
+          <div className="grid lg:grid-cols-2 gap-10 animate-fade-up">
             {/* Price Settings */}
             <div className="space-y-8">
               <div className="flex items-center gap-3 mb-6">
@@ -2523,8 +2831,8 @@ const AdminDashboard = ({
             {/* Profile & Social Settings */}
             <div className="space-y-8">
               <div className="flex items-center gap-3 mb-6">
-                <Camera className="text-gold" />
-                <h3 className="font-serif text-2xl text-white">Profil & Réseaux</h3>
+                <Settings className="text-gold" />
+                <h3 className="font-serif text-2xl text-white">Identité & Profil</h3>
               </div>
 
               <div className="bg-white/5 border border-gold/15 p-8 rounded-sm space-y-8">

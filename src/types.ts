@@ -60,3 +60,19 @@ export interface TouristSite {
   img: string;
   order?: number;
 }
+
+export interface ServiceItem {
+  id: string;
+  title: string;
+  desc: string;
+  price: string;
+  icon: 'plane' | 'clock' | 'key';
+}
+
+export interface ReviewItem {
+  id: string;
+  name: string;
+  meta: string;
+  text: string;
+  rating: number;
+}
