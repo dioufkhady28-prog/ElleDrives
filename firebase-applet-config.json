@@ -1,10 +1,10 @@
 {
-  "projectId": "gen-lang-client-0040382355",
-  "appId": "1:194076105026:web:db842f994ac39b1db0d0db",
-  "apiKey": "AIzaSyAqWy_2AuZkzbvkMyO38ORykiq-TTWsXXY",
-  "authDomain": "gen-lang-client-0040382355.firebaseapp.com",
-  "firestoreDatabaseId": "ai-studio-f9966921-c21c-4870-89e7-ee8a3d8ce688",
-  "storageBucket": "gen-lang-client-0040382355.firebasestorage.app",
-  "messagingSenderId": "194076105026",
+  "projectId": "elledrives",
+  "appId": "1:605328770740:web:6a1ea7fbb2fd8812ab79e1",
+  "apiKey": "AIzaSyAuLA4JyClVD9K7hE_uv7feQ2BoUiPPnu0",
+  "authDomain": "elledrives.firebaseapp.com",
+  "firestoreDatabaseId": "(default)",
+  "storageBucket": "elledrives.firebasestorage.app",
+  "messagingSenderId": "605328770740",
   "measurementId": ""
 }

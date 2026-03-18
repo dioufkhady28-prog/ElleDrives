@@ -2037,7 +2037,7 @@ const AdminDashboard = ({
   onLogin: () => void,
   onLogout: () => void
 }) => {
-  const [activeTab, setActiveTab] = useState<'reservations' | 'settings' | 'tourisme' | 'content'>('reservations');
+  const [activeTab, setActiveTab] = useState<'reservations' | 'settings' | 'tourisme' | 'content' | 'backups'>('reservations');
   const [filter, setFilter] = useState<ReservationStatus | 'all'>('all');
   const [search, setSearch] = useState('');
   const [editingRes, setEditingRes] = useState<Reservation | null>(null);
@@ -2056,6 +2056,34 @@ const AdminDashboard = ({
 
   const deleteSite = (id: string) => {
     onUpdateTouristSites(touristSites.filter(s => s.id !== id));
+  };
+
+  const handleExportData = () => {
+    const data = {
+      reservations,
+      prices,
+      services,
+      reviews,
+      touristSites,
+      siteConfig: {
+        heroImage,
+        heroTitle,
+        heroSubtitle,
+        logo,
+        founderPhoto,
+        tiktokName
+      },
+      exportDate: new Date().toISOString()
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `elledrives_backup_${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   const saveSite = (site: TouristSite) => {
@@ -2202,6 +2230,12 @@ const AdminDashboard = ({
               className={`px-4 py-1.5 rounded-full text-[10px] tracking-widest uppercase transition-all ${activeTab === 'settings' ? 'bg-gold text-dark' : 'text-white/40 hover:text-white'}`}
             >
               Paramètres
+            </button>
+            <button 
+              onClick={() => setActiveTab('backups')}
+              className={`px-4 py-1.5 rounded-full text-[10px] tracking-widest uppercase transition-all ${activeTab === 'backups' ? 'bg-gold text-dark' : 'text-white/40 hover:text-white'}`}
+            >
+              Sauvegardes
             </button>
           </div>
           <div className="h-8 w-px bg-white/10 mx-2" />
@@ -2888,6 +2922,60 @@ const AdminDashboard = ({
                     />
                   </div>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+        {activeTab === 'backups' && (
+          <div className="space-y-10">
+            <div className="flex items-center gap-3 mb-6">
+              <Clock className="text-gold" />
+              <h3 className="font-serif text-2xl text-white">Sauvegardes & Export</h3>
+            </div>
+            
+            <div className="bg-white/5 border border-gold/15 p-8 rounded-sm space-y-8">
+              <div>
+                <h4 className="text-gold text-xs uppercase tracking-widest mb-4">Exportation Manuelle</h4>
+                <p className="text-white/60 text-sm mb-6 max-w-2xl">
+                  Téléchargez une copie complète de toutes vos données (réservations, tarifs, services, avis et configuration du site) au format JSON. Ce fichier peut être utilisé pour restaurer vos données ou les consulter hors-ligne.
+                </p>
+                <button 
+                  onClick={handleExportData}
+                  className="btn-primary flex items-center gap-3"
+                >
+                  <Upload className="rotate-180" size={18} /> Exporter toutes les données
+                </button>
+              </div>
+
+              <div className="h-px bg-white/10" />
+
+              <div>
+                <h4 className="text-gold text-xs uppercase tracking-widest mb-4">Sauvegardes Automatiques (Firebase)</h4>
+                <p className="text-white/60 text-sm mb-4 max-w-2xl">
+                  Votre base de données Firestore bénéficie de sauvegardes automatiques gérées par Google Cloud. 
+                </p>
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div className="bg-dark/30 p-6 border border-white/5 rounded-sm">
+                    <div className="text-gold text-[10px] uppercase tracking-widest mb-2 font-bold">Point-in-Time Recovery</div>
+                    <p className="text-[11px] text-white/40 leading-relaxed">
+                      Permet de restaurer la base de données à n'importe quel moment précis des 7 derniers jours. (Nécessite un plan Blaze).
+                    </p>
+                  </div>
+                  <div className="bg-dark/30 p-6 border border-white/5 rounded-sm">
+                    <div className="text-gold text-[10px] uppercase tracking-widest mb-2 font-bold">Exports Planifiés</div>
+                    <p className="text-[11px] text-white/40 leading-relaxed">
+                      Vous pouvez configurer des exports quotidiens vers Google Cloud Storage via la console Firebase.
+                    </p>
+                  </div>
+                </div>
+                <a 
+                  href="https://console.firebase.google.com/project/elledrives/firestore/databases/(default)/backups" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="inline-block mt-6 text-gold text-[10px] uppercase tracking-widest hover:underline"
+                >
+                  Accéder aux paramètres de sauvegarde Firebase →
+                </a>
               </div>
             </div>
           </div>
