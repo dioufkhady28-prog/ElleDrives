@@ -16,7 +16,10 @@ import {
   doc, 
   setDoc, 
   updateDoc,
-  getDoc
+  getDoc,
+  getDocs,
+  deleteDoc,
+  writeBatch
 } from 'firebase/firestore';
 import { 
   onAuthStateChanged, 
@@ -51,6 +54,37 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 
 // --- Error Handling ---
+
+const compressImage = (base64Str: string, maxWidth = 1200, maxHeight = 1200, quality = 0.7): Promise<string> => {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.src = base64Str;
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      let width = img.width;
+      let height = img.height;
+
+      if (width > height) {
+        if (width > maxWidth) {
+          height *= maxWidth / width;
+          width = maxWidth;
+        }
+      } else {
+        if (height > maxHeight) {
+          width *= maxHeight / height;
+          height = maxHeight;
+        }
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx?.drawImage(img, 0, 0, width, height);
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = () => resolve(base64Str); // Fallback to original if error
+  });
+};
 
 enum OperationType {
   CREATE = 'create',
@@ -648,6 +682,42 @@ export default function App() {
   const [touristSites, setTouristSites] = useState<TouristSite[]>([]);
   const [user, setUser] = useState<User | null>(null);
 
+  // Sync Settings from Firestore
+  useEffect(() => {
+    const docRef = doc(db, 'settings', 'global');
+    const unsubscribe = onSnapshot(docRef, (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        if (data.prices) setPrices(data.prices);
+        if (data.founderPhoto) setFounderPhoto(data.founderPhoto);
+        if (data.logo) setLogo(data.logo);
+        if (data.heroImage) setHeroImage(data.heroImage);
+        if (data.heroTitle) setHeroTitle(data.heroTitle);
+        if (data.heroSubtitle) setHeroSubtitle(data.heroSubtitle);
+        if (data.services) setServices(data.services);
+        if (data.reviews) setReviews(data.reviews);
+        if (data.tiktokName) setTiktokName(data.tiktokName);
+      } else {
+        // Initialize settings if they don't exist
+        const initialSettings = {
+          prices: DEFAULT_PRICES,
+          services: DEFAULT_SERVICES,
+          reviews: DEFAULT_REVIEWS,
+          heroImage: 'https://pepiniere.sn/wp-content/uploads/2025/03/baobab.webp',
+          heroTitle: "Plus qu'un trajet,\nune relation\nde confiance.",
+          heroSubtitle: "🇸🇳 Service Premium — Dakar & Environs",
+          tiktokName: 'EllesDrives'
+        };
+        setDoc(docRef, initialSettings).catch(err => {
+          handleFirestoreError(err, OperationType.WRITE, 'settings/global');
+        });
+      }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'settings/global');
+    });
+    return () => unsubscribe();
+  }, []);
+
   useEffect(() => {
     const q = query(collection(db, 'tourisme'), orderBy('order', 'asc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -656,23 +726,7 @@ export default function App() {
         id: doc.id
       })) as TouristSite[];
       
-      if (docs.length === 0) {
-        // Initial data if empty
-        const initial = [
-          { id: '1', title: 'Le Baobab Sacré', desc: 'Emblème du Sénégal, cet arbre millénaire incarne la force et la sagesse.', img: 'https://images.unsplash.com/photo-1500382017468-9049fed747ef', order: 0 },
-          { id: '2', title: 'Safari Bandia', desc: 'Une immersion sauvage à la rencontre des girafes, rhinocéros et zèbres.', img: 'https://images.unsplash.com/photo-1547407139-3c921a66005c', order: 1 },
-          { id: '3', title: 'Désert de Lompoul', desc: 'Des dunes de sable ocre à perte de vue pour une expérience saharienne unique.', img: 'https://images.unsplash.com/photo-1509316785289-025f5b846b35', order: 2 }
-        ];
-        initial.forEach(async (s) => {
-          try {
-            await setDoc(doc(db, 'tourisme', s.id), s);
-          } catch (err) {
-            handleFirestoreError(err, OperationType.WRITE, `tourisme/${s.id}`);
-          }
-        });
-      } else {
-        setTouristSites(docs);
-      }
+      setTouristSites(docs);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'tourisme');
     });
@@ -702,35 +756,6 @@ export default function App() {
       setUser(u);
     });
     return () => unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    const savedPrices = localStorage.getItem('elledrives_prices');
-    if (savedPrices) setPrices(JSON.parse(savedPrices));
-
-    const savedPhoto = localStorage.getItem('elledrives_founder_photo');
-    if (savedPhoto) setFounderPhoto(savedPhoto);
-
-    const savedLogo = localStorage.getItem('elledrives_logo');
-    if (savedLogo) setLogo(savedLogo);
-
-    const savedHero = localStorage.getItem('elledrives_hero_image');
-    if (savedHero) setHeroImage(savedHero);
-
-    const savedHeroTitle = localStorage.getItem('elledrives_hero_title');
-    if (savedHeroTitle) setHeroTitle(savedHeroTitle);
-
-    const savedHeroSubtitle = localStorage.getItem('elledrives_hero_subtitle');
-    if (savedHeroSubtitle) setHeroSubtitle(savedHeroSubtitle);
-
-    const savedServices = localStorage.getItem('elledrives_services');
-    if (savedServices) setServices(JSON.parse(savedServices));
-
-    const savedReviews = localStorage.getItem('elledrives_reviews');
-    if (savedReviews) setReviews(JSON.parse(savedReviews));
-
-    const savedTiktok = localStorage.getItem('elledrives_tiktok_name');
-    if (savedTiktok) setTiktokName(savedTiktok);
   }, []);
 
   useEffect(() => {
@@ -806,63 +831,107 @@ export default function App() {
     }
   };
 
-  const handleUpdatePrices = (newPrices: typeof DEFAULT_PRICES) => {
+  const handleUpdatePrices = async (newPrices: typeof DEFAULT_PRICES) => {
     setPrices(newPrices);
-    localStorage.setItem('elledrives_prices', JSON.stringify(newPrices));
+    try {
+      await updateDoc(doc(db, 'settings', 'global'), { prices: newPrices });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, 'settings/global');
+    }
   };
 
-  const handleUpdatePhoto = (photo: string) => {
+  const handleUpdatePhoto = async (photo: string) => {
     setFounderPhoto(photo);
-    localStorage.setItem('elledrives_founder_photo', photo);
+    try {
+      await updateDoc(doc(db, 'settings', 'global'), { founderPhoto: photo });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, 'settings/global');
+    }
   };
 
-  const handleUpdateLogo = (newLogo: string) => {
+  const handleUpdateLogo = async (newLogo: string) => {
     setLogo(newLogo);
-    localStorage.setItem('elledrives_logo', newLogo);
+    try {
+      await updateDoc(doc(db, 'settings', 'global'), { logo: newLogo });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, 'settings/global');
+    }
   };
 
-  const handleUpdateHero = (newHero: string) => {
+  const handleUpdateHero = async (newHero: string) => {
     setHeroImage(newHero);
-    localStorage.setItem('elledrives_hero_image', newHero);
+    try {
+      await updateDoc(doc(db, 'settings', 'global'), { heroImage: newHero });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, 'settings/global');
+    }
   };
 
-  const handleUpdateHeroText = (title: string, subtitle: string) => {
+  const handleUpdateHeroText = async (title: string, subtitle: string) => {
     setHeroTitle(title);
     setHeroSubtitle(subtitle);
-    localStorage.setItem('elledrives_hero_title', title);
-    localStorage.setItem('elledrives_hero_subtitle', subtitle);
+    try {
+      await updateDoc(doc(db, 'settings', 'global'), { heroTitle: title, heroSubtitle: subtitle });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, 'settings/global');
+    }
   };
 
-  const handleUpdateServices = (newServices: ServiceItem[]) => {
+  const handleUpdateServices = async (newServices: ServiceItem[]) => {
     setServices(newServices);
-    localStorage.setItem('elledrives_services', JSON.stringify(newServices));
+    try {
+      await updateDoc(doc(db, 'settings', 'global'), { services: newServices });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, 'settings/global');
+    }
   };
 
-  const handleUpdateReviews = (newReviews: ReviewItem[]) => {
+  const handleUpdateReviews = async (newReviews: ReviewItem[]) => {
     setReviews(newReviews);
-    localStorage.setItem('elledrives_reviews', JSON.stringify(newReviews));
+    try {
+      await updateDoc(doc(db, 'settings', 'global'), { reviews: newReviews });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, 'settings/global');
+    }
   };
 
-  const handleUpdateTiktok = (name: string) => {
+  const handleUpdateTiktok = async (name: string) => {
     setTiktokName(name);
-    localStorage.setItem('elledrives_tiktok_name', name);
+    try {
+      await updateDoc(doc(db, 'settings', 'global'), { tiktokName: name });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, 'settings/global');
+    }
   };
 
   const handleUpdateTouristSites = async (sites: TouristSite[]) => {
-    // This is a bit simplified, in a real app we'd handle individual updates
-    // For now, we'll just update the local state and assume individual updates happen in Admin
+    // Optimistic update
     setTouristSites(sites);
-    // Persist changes to Firestore
-    for (const site of sites) {
-      try {
-      await setDoc(doc(db, 'tourisme', site.id), site);
+
+    try {
+      const q = query(collection(db, 'tourisme'));
+      const snapshot = await getDocs(q);
+      const existingIds = snapshot.docs.map(d => d.id);
+      const newIds = sites.map(s => s.id);
+
+      const batch = writeBatch(db);
+
+      // Delete removed sites
+      for (const id of existingIds) {
+        if (!newIds.includes(id)) {
+          batch.delete(doc(db, 'tourisme', id));
+        }
+      }
+
+      // Update/Add sites
+      for (const site of sites) {
+        batch.set(doc(db, 'tourisme', site.id), site);
+      }
+
+      await batch.commit();
     } catch (err) {
-      handleFirestoreError(err, OperationType.WRITE, `tourisme/${site.id}`);
+      handleFirestoreError(err, OperationType.WRITE, 'tourisme');
     }
-    }
-    // Handle deletions (not ideal but works for this demo)
-    const currentIds = sites.map(s => s.id);
-    // We'd need to fetch all and delete those not in currentIds
   };
 
   const handleBooking = async (data: Partial<Reservation>) => {
@@ -2043,6 +2112,7 @@ const AdminDashboard = ({
   const [search, setSearch] = useState('');
   const [editingRes, setEditingRes] = useState<Reservation | null>(null);
   const [editingSite, setEditingSite] = useState<TouristSite | null>(null);
+  const [isCompressing, setIsCompressing] = useState(false);
 
   const addSite = () => {
     const newSite: TouristSite = {
@@ -2117,9 +2187,12 @@ const AdminDashboard = ({
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      setIsCompressing(true);
       const reader = new FileReader();
-      reader.onloadend = () => {
-        onUpdatePhoto(reader.result as string);
+      reader.onloadend = async () => {
+        const compressed = await compressImage(reader.result as string, 800, 800, 0.8);
+        onUpdatePhoto(compressed);
+        setIsCompressing(false);
       };
       reader.readAsDataURL(file);
     }
@@ -2128,9 +2201,12 @@ const AdminDashboard = ({
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      setIsCompressing(true);
       const reader = new FileReader();
-      reader.onloadend = () => {
-        onUpdateLogo(reader.result as string);
+      reader.onloadend = async () => {
+        const compressed = await compressImage(reader.result as string, 400, 400, 0.9);
+        onUpdateLogo(compressed);
+        setIsCompressing(false);
       };
       reader.readAsDataURL(file);
     }
@@ -2139,9 +2215,12 @@ const AdminDashboard = ({
   const handleHeroUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      setIsCompressing(true);
       const reader = new FileReader();
-      reader.onloadend = () => {
-        onUpdateHero(reader.result as string);
+      reader.onloadend = async () => {
+        const compressed = await compressImage(reader.result as string, 1920, 1080, 0.7);
+        onUpdateHero(compressed);
+        setIsCompressing(false);
       };
       reader.readAsDataURL(file);
     }
@@ -2195,6 +2274,18 @@ const AdminDashboard = ({
       className="fixed inset-0 z-[300] bg-dark overflow-y-auto"
     >
       <AnimatePresence>
+        {isCompressing && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[500] bg-dark/80 backdrop-blur-sm flex flex-col items-center justify-center"
+          >
+            <div className="w-12 h-12 border-4 border-gold border-t-transparent rounded-full animate-spin mb-4" />
+            <p className="text-gold font-serif text-lg">Optimisation de l'image...</p>
+            <p className="text-white/40 text-xs mt-2">Cela permet d'accélérer le chargement du site.</p>
+          </motion.div>
+        )}
         {editingRes && (
           <EditReservationModal 
             reservation={editingRes} 
@@ -2453,13 +2544,37 @@ const AdminDashboard = ({
                         />
                       </div>
                       <div className="space-y-1">
-                        <label className="label-field">Image URL</label>
-                        <input 
-                          type="text" 
-                          value={editingSite.img} 
-                          className="input-field" 
-                          onChange={e => setEditingSite({ ...editingSite, img: e.target.value })} 
-                        />
+                        <label className="label-field">Image</label>
+                        <div className="flex items-center gap-4">
+                          <input 
+                            type="text" 
+                            value={editingSite.img} 
+                            className="input-field flex-1" 
+                            placeholder="URL de l'image"
+                            onChange={e => setEditingSite({ ...editingSite, img: e.target.value })} 
+                          />
+                          <label className="btn-outline cursor-pointer whitespace-nowrap text-[10px] !py-2">
+                            <Upload size={14} className="inline mr-2" /> Upload
+                            <input 
+                              type="file" 
+                              accept="image/*" 
+                              className="hidden" 
+                              onChange={async (e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  setIsCompressing(true);
+                                  const reader = new FileReader();
+                                  reader.onloadend = async () => {
+                                    const compressed = await compressImage(reader.result as string, 1200, 800, 0.7);
+                                    setEditingSite({ ...editingSite, img: compressed });
+                                    setIsCompressing(false);
+                                  };
+                                  reader.readAsDataURL(file);
+                                }
+                              }} 
+                            />
+                          </label>
+                        </div>
                       </div>
                       <div className="space-y-1">
                         <label className="label-field">Description</label>

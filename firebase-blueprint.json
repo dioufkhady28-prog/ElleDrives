@@ -34,6 +34,32 @@
       },
       "required": ["id", "title", "desc", "img"]
     },
+    "ServiceItem": {
+      "title": "ServiceItem",
+      "description": "A service offered by ElleDrives",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "icon": { "type": "string" },
+        "title": { "type": "string" },
+        "desc": { "type": "string" },
+        "price": { "type": "string" }
+      },
+      "required": ["id", "title", "desc", "price"]
+    },
+    "ReviewItem": {
+      "title": "ReviewItem",
+      "description": "A customer review",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "meta": { "type": "string" },
+        "text": { "type": "string" },
+        "rating": { "type": "number" }
+      },
+      "required": ["id", "name", "text", "rating"]
+    },
     "User": {
       "title": "User",
       "description": "User profile and roles",
@@ -44,6 +70,23 @@
         "role": { "type": "string", "enum": ["admin", "user"] }
       },
       "required": ["uid", "email", "role"]
+    },
+    "Settings": {
+      "title": "Settings",
+      "description": "Global application settings and content",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "prices": { "type": "object" },
+        "services": { "type": "array", "items": { "$ref": "ServiceItem" } },
+        "reviews": { "type": "array", "items": { "$ref": "ReviewItem" } },
+        "heroImage": { "type": "string" },
+        "heroTitle": { "type": "string" },
+        "heroSubtitle": { "type": "string" },
+        "logo": { "type": "string" },
+        "founderPhoto": { "type": "string" },
+        "tiktokName": { "type": "string" }
+      }
     }
   },
   "firestore": {
@@ -58,6 +101,10 @@
     "users/{userId}": {
       "schema": "User",
       "description": "User profiles"
+    },
+    "settings/{settingId}": {
+      "schema": "Settings",
+      "description": "Global settings"
     }
   }
 }
