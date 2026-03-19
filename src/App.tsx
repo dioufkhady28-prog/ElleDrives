@@ -2308,19 +2308,48 @@ const AdminDashboard = ({
           const updates: Promise<any>[] = [];
           
           // Update everything
-          if (data.prices) updates.push(onUpdatePrices(data.prices));
-          if (data.services) updates.push(onUpdateServices(data.services));
-          if (data.reviews) updates.push(onUpdateReviews(data.reviews));
-          if (data.touristSites) updates.push(onUpdateTouristSites(data.touristSites));
-          if (data.reservations) updates.push(onUpdateAllReservations(data.reservations));
+          if (data.prices) {
+            updates.push(onUpdatePrices(data.prices));
+            setLocalPrices(data.prices);
+          }
+          if (data.services) {
+            updates.push(onUpdateServices(data.services));
+            setLocalServices(data.services);
+          }
+          if (data.reviews) {
+            updates.push(onUpdateReviews(data.reviews));
+            setLocalReviews(data.reviews);
+          }
+          if (data.touristSites) {
+            updates.push(onUpdateTouristSites(data.touristSites));
+          }
+          if (data.reservations) {
+            updates.push(onUpdateAllReservations(data.reservations));
+          }
           
           if (data.siteConfig) {
             const config = data.siteConfig;
-            if (config.heroImage) updates.push(onUpdateHero(config.heroImage));
-            if (config.heroTitle && config.heroSubtitle) updates.push(onUpdateHeroText(config.heroTitle, config.heroSubtitle));
-            if (config.logo) updates.push(onUpdateLogo(config.logo));
-            if (config.founderPhoto) updates.push(onUpdatePhoto(config.founderPhoto));
-            if (config.tiktokName) updates.push(onUpdateTiktok(config.tiktokName));
+            if (config.heroImage) {
+              updates.push(onUpdateHero(config.heroImage));
+              setLocalHeroImage(config.heroImage);
+            }
+            if (config.heroTitle !== undefined && config.heroSubtitle !== undefined) {
+              updates.push(onUpdateHeroText(config.heroTitle, config.heroSubtitle));
+              setLocalHeroTitle(config.heroTitle);
+              setLocalHeroSubtitle(config.heroSubtitle);
+            }
+            if (config.logo) {
+              updates.push(onUpdateLogo(config.logo));
+              setLocalLogo(config.logo);
+            }
+            if (config.founderPhoto) {
+              updates.push(onUpdatePhoto(config.founderPhoto));
+              setLocalFounderPhoto(config.founderPhoto);
+            }
+            if (config.tiktokName) {
+              updates.push(onUpdateTiktok(config.tiktokName));
+              setLocalTiktokName(config.tiktokName);
+            }
           }
           
           await Promise.all(updates);
