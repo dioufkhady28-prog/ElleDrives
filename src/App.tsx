@@ -1,4 +1,5 @@
 import React, { useState, useEffect, Component, ReactNode } from 'react';
+import { DEFAULT_LOGO } from './constants';
 import { 
   Reservation, 
   ReservationType, 
@@ -186,38 +187,42 @@ class ErrorBoundary extends (Component as any) {
 
 // --- Components ---
 
-const Logo = ({ className = "", src = null }: { className?: string, src?: string | null }) => (
-  <div className={`flex items-center gap-3 group ${className}`}>
-    <div className="relative w-12 h-12 flex items-center justify-center">
-      {src ? (
-        <img src={src} alt="Logo" className="w-full h-full object-contain" referrerPolicy="no-referrer" />
-      ) : (
-        <>
-          {/* Outer Circle / Steering Wheel */}
-          <svg viewBox="0 0 100 100" className="absolute inset-0 w-full h-full text-gold fill-none stroke-gold stroke-[2.5]">
-            <circle cx="50" cy="50" r="46" />
-            {/* Steering wheel spokes at the bottom */}
-            <path d="M50 75 L50 96" strokeLinecap="round" />
-            <path d="M30 85 L15 92" strokeLinecap="round" />
-            <path d="M70 85 L85 92" strokeLinecap="round" />
-          </svg>
-          {/* Woman Profile Silhouette */}
-          <svg viewBox="0 0 100 100" className="absolute inset-0 w-full h-full fill-gold p-3">
-            <path d="M55,25 C45,25 35,35 35,50 C35,60 40,70 50,75 C52,76 55,72 55,70 C55,68 53,65 50,62 C45,58 42,50 45,40 C48,30 55,28 60,30 C65,32 68,40 65,50 C63,60 58,65 55,70 C55,75 60,80 65,75 C75,65 80,50 75,35 C70,25 65,25 55,25 Z" />
-            {/* Refined profile line */}
-            <path d="M58,35 C52,35 48,40 48,48 C48,55 52,60 55,62 L55,68 C52,68 50,65 48,62 C45,58 43,52 45,45 C47,38 52,35 58,35 Z" fill="black" opacity="0.2" />
-          </svg>
-        </>
-      )}
+const Logo = ({ className = "", src = null }: { className?: string, src?: string | null }) => {
+  const displaySrc = src || (DEFAULT_LOGO.length > 100 ? DEFAULT_LOGO : null);
+  
+  return (
+    <div className={`flex items-center gap-3 group ${className}`}>
+      <div className="relative w-12 h-12 flex items-center justify-center">
+        {displaySrc ? (
+          <img src={displaySrc} alt="Logo" className="w-full h-full object-contain" referrerPolicy="no-referrer" />
+        ) : (
+          <>
+            {/* Outer Circle / Steering Wheel */}
+            <svg viewBox="0 0 100 100" className="absolute inset-0 w-full h-full text-gold fill-none stroke-gold stroke-[2.5]">
+              <circle cx="50" cy="50" r="46" />
+              {/* Steering wheel spokes at the bottom */}
+              <path d="M50 75 L50 96" strokeLinecap="round" />
+              <path d="M30 85 L15 92" strokeLinecap="round" />
+              <path d="M70 85 L85 92" strokeLinecap="round" />
+            </svg>
+            {/* Woman Profile Silhouette */}
+            <svg viewBox="0 0 100 100" className="absolute inset-0 w-full h-full fill-gold p-3">
+              <path d="M55,25 C45,25 35,35 35,50 C35,60 40,70 50,75 C52,76 55,72 55,70 C55,68 53,65 50,62 C45,58 42,50 45,40 C48,30 55,28 60,30 C65,32 68,40 65,50 C63,60 58,65 55,70 C55,75 60,80 65,75 C75,65 80,50 75,35 C70,25 65,25 55,25 Z" />
+              {/* Refined profile line */}
+              <path d="M58,35 C52,35 48,40 48,48 C48,55 52,60 55,62 L55,68 C52,68 50,65 48,62 C45,58 43,52 45,45 C47,38 52,35 58,35 Z" fill="black" opacity="0.2" />
+            </svg>
+          </>
+        )}
+      </div>
+      <div className="flex flex-col" translate="no">
+        <span className="font-serif text-2xl font-light text-gold tracking-widest leading-none">
+          Elle<span className="italic text-white">Drives</span>
+        </span>
+        <span className="text-[8px] text-gold/50 uppercase tracking-[0.3em] mt-1">Conduite au Féminin</span>
+      </div>
     </div>
-    <div className="flex flex-col" translate="no">
-      <span className="font-serif text-2xl font-light text-gold tracking-widest leading-none">
-        Elle<span className="italic text-white">Drives</span>
-      </span>
-      <span className="text-[8px] text-gold/50 uppercase tracking-[0.3em] mt-1">Conduite au Féminin</span>
-    </div>
-  </div>
-);
+  );
+};
 
 const Navbar = ({ onOpenAdmin, onOpenTrack, logo }: { onOpenAdmin: () => void, onOpenTrack: () => void, logo: string | null }) => {
   const [isScrolled, setIsScrolled] = useState(false);
@@ -566,29 +571,33 @@ const TouristSites = ({ sites }: { sites: TouristSite[] }) => (
   </section>
 );
 
-const Footer = ({ tiktokName, logo }: { tiktokName: string, logo: string | null }) => (
-  <footer className="bg-[#080604] section-padding py-10 border-t border-gold/10 flex flex-col md:flex-row items-center justify-between gap-8">
-    {logo ? (
-      <img src={logo} alt="Logo" className="h-12 object-contain" />
-    ) : (
-      <Logo className="scale-75 origin-left" />
-    )}
-    <div className="text-[11px] text-white/20 tracking-wider">
-      © 2025 <span translate="no">ElleDrives</span> · Dakar, Sénégal · Tous droits réservés
-    </div>
-    <div className="flex gap-4">
-      <a href="https://www.facebook.com/share/1BEHgAMwgr/?mibextid=wwXlfr" target="_blank" rel="noopener noreferrer" className="w-9 h-9 border border-white/10 rounded-full flex items-center justify-center text-white/40 hover:border-gold hover:text-gold transition-all">
-        <Facebook size={16} />
-      </a>
-      <a href={`https://www.tiktok.com/@${tiktokName.replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="w-9 h-9 border border-white/10 rounded-full flex items-center justify-center text-white/40 hover:border-gold hover:text-gold transition-all">
-        <Music2 size={16} />
-      </a>
-      <a href="https://wa.me/221766385938" target="_blank" rel="noopener noreferrer" className="w-9 h-9 border border-white/10 rounded-full flex items-center justify-center text-white/40 hover:border-gold hover:text-gold transition-all">
-        <MessageCircle size={16} />
-      </a>
-    </div>
-  </footer>
-);
+const Footer = ({ tiktokName, logo }: { tiktokName: string, logo: string | null }) => {
+  const displayLogo = logo || (DEFAULT_LOGO.length > 100 ? DEFAULT_LOGO : null);
+  
+  return (
+    <footer className="bg-[#080604] section-padding py-10 border-t border-gold/10 flex flex-col md:flex-row items-center justify-between gap-8">
+      {displayLogo ? (
+        <img src={displayLogo} alt="Logo" className="h-12 object-contain" referrerPolicy="no-referrer" />
+      ) : (
+        <Logo className="scale-75 origin-left" />
+      )}
+      <div className="text-[11px] text-white/20 tracking-wider">
+        © 2025 <span translate="no">ElleDrives</span> · Dakar, Sénégal · Tous droits réservés
+      </div>
+      <div className="flex gap-4">
+        <a href="https://www.facebook.com/share/1BEHgAMwgr/?mibextid=wwXlfr" target="_blank" rel="noopener noreferrer" className="w-9 h-9 border border-white/10 rounded-full flex items-center justify-center text-white/40 hover:border-gold hover:text-gold transition-all">
+          <Facebook size={16} />
+        </a>
+        <a href={`https://www.tiktok.com/@${tiktokName.replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="w-9 h-9 border border-white/10 rounded-full flex items-center justify-center text-white/40 hover:border-gold hover:text-gold transition-all">
+          <Music2 size={16} />
+        </a>
+        <a href="https://wa.me/221766385938" target="_blank" rel="noopener noreferrer" className="w-9 h-9 border border-white/10 rounded-full flex items-center justify-center text-white/40 hover:border-gold hover:text-gold transition-all">
+          <MessageCircle size={16} />
+        </a>
+      </div>
+    </footer>
+  );
+};
 
 // --- Main App ---
 
@@ -712,6 +721,21 @@ export default function App() {
   const [touristSites, setTouristSites] = useState<TouristSite[]>([]);
   const [user, setUser] = useState<User | null>(null);
 
+  // Update favicon when logo changes
+  useEffect(() => {
+    const link = document.querySelector("link[rel~='icon']") as HTMLLinkElement;
+    if (link) {
+      if (logo) {
+        link.href = logo;
+      } else if (DEFAULT_LOGO && DEFAULT_LOGO.length > 100) {
+        link.href = DEFAULT_LOGO;
+      } else {
+        // Fallback to default favicon if no logo is set
+        link.href = '/favicon.svg';
+      }
+    }
+  }, [logo]);
+
   // Sync Settings from Firestore
   useEffect(() => {
     const unsubGlobal = onSnapshot(doc(db, 'settings', 'global'), (snapshot) => {
@@ -747,6 +771,10 @@ export default function App() {
         console.log('Branding loaded:', { hasLogo: !!data.logo, hasPhoto: !!data.founderPhoto });
         if (data.logo) setLogo(data.logo);
         if (data.founderPhoto) setFounderPhoto(data.founderPhoto);
+      } else if (user && user.email === 'dioufkhady28@gmail.com') {
+        console.log('Initializing branding settings...');
+        setDoc(doc(db, 'settings', 'branding'), { logo: null, founderPhoto: null }, { merge: true })
+          .catch(err => handleFirestoreError(err, OperationType.WRITE, 'settings/branding'));
       }
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, 'settings/branding');
@@ -757,6 +785,10 @@ export default function App() {
         const data = snapshot.data();
         console.log('Hero loaded:', { hasHero: !!data.heroImage });
         if (data.heroImage) setHeroImage(data.heroImage);
+      } else if (user && user.email === 'dioufkhady28@gmail.com') {
+        console.log('Initializing hero settings...');
+        setDoc(doc(db, 'settings', 'hero'), { heroImage: 'https://pepiniere.sn/wp-content/uploads/2025/03/baobab.webp' }, { merge: true })
+          .catch(err => handleFirestoreError(err, OperationType.WRITE, 'settings/hero'));
       }
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, 'settings/hero');
@@ -767,18 +799,25 @@ export default function App() {
       unsubBranding();
       unsubHero();
     };
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     const q = query(collection(db, 'tourisme'), orderBy('order', 'asc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      if (snapshot.empty && user && user.email === 'dioufkhady28@gmail.com') {
-        // Seed if empty and admin is logged in
-        const batch = writeBatch(db);
-        DEFAULT_TOURIST_SITES.forEach(site => {
-          batch.set(doc(db, 'tourisme', site.id), site);
-        });
-        batch.commit().catch(err => handleFirestoreError(err, OperationType.WRITE, 'tourisme'));
+      if (snapshot.empty) {
+        console.log('Tourist sites collection is empty.');
+        if (user && user.email === 'dioufkhady28@gmail.com') {
+          console.log('Seeding default tourist sites...');
+          const batch = writeBatch(db);
+          DEFAULT_TOURIST_SITES.forEach(site => {
+            batch.set(doc(db, 'tourisme', site.id), site);
+          });
+          batch.commit().catch(err => handleFirestoreError(err, OperationType.WRITE, 'tourisme'));
+        } else {
+          // If not admin and empty, show defaults locally so page doesn't look broken
+          setTouristSites(DEFAULT_TOURIST_SITES);
+          return;
+        }
       }
       
       const docs = snapshot.docs.map(doc => ({
@@ -786,7 +825,9 @@ export default function App() {
         id: doc.id
       })) as TouristSite[];
       
-      setTouristSites(docs);
+      if (docs.length > 0) {
+        setTouristSites(docs);
+      }
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'tourisme');
     });
