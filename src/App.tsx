@@ -134,6 +134,12 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
     path
   }
   console.error('Firestore Error: ', JSON.stringify(errInfo));
+  
+  // Show alert for write failures so user knows it didn't save
+  if (operationType === OperationType.WRITE || operationType === OperationType.UPDATE || operationType === OperationType.DELETE) {
+    alert("Erreur lors de l'enregistrement : " + errInfo.error + "\nVérifiez votre connexion ou vos permissions.");
+  }
+  
   throw new Error(JSON.stringify(errInfo));
 }
 
@@ -708,40 +714,59 @@ export default function App() {
 
   // Sync Settings from Firestore
   useEffect(() => {
-    const docRef = doc(db, 'settings', 'global');
-    const unsubscribe = onSnapshot(docRef, (snapshot) => {
+    const unsubGlobal = onSnapshot(doc(db, 'settings', 'global'), (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.data();
         if (data.prices) setPrices(data.prices);
-        setFounderPhoto(data.founderPhoto || null);
-        setLogo(data.logo || null);
-        setHeroImage(data.heroImage || 'https://pepiniere.sn/wp-content/uploads/2025/03/baobab.webp');
         setHeroTitle(data.heroTitle || "Plus qu'un trajet,\nune relation\nde confiance.");
         setHeroSubtitle(data.heroSubtitle || "🇸🇳 Service Premium — Dakar & Environs");
         if (data.services) setServices(data.services);
         if (data.reviews) setReviews(data.reviews);
         setTiktokName(data.tiktokName || 'EllesDrives');
       } else {
-        // Initialize settings if they don't exist
+        // Initialize global settings if they don't exist
         const initialSettings = {
           prices: DEFAULT_PRICES,
           services: DEFAULT_SERVICES,
           reviews: DEFAULT_REVIEWS,
-          heroImage: 'https://pepiniere.sn/wp-content/uploads/2025/03/baobab.webp',
           heroTitle: "Plus qu'un trajet,\nune relation\nde confiance.",
           heroSubtitle: "🇸🇳 Service Premium — Dakar & Environs",
-          tiktokName: 'EllesDrives',
-          founderPhoto: null,
-          logo: null
+          tiktokName: 'EllesDrives'
         };
-        setDoc(docRef, initialSettings).catch(err => {
+        setDoc(doc(db, 'settings', 'global'), initialSettings).catch(err => {
           handleFirestoreError(err, OperationType.WRITE, 'settings/global');
         });
       }
     }, (error) => {
       handleFirestoreError(error, OperationType.GET, 'settings/global');
     });
-    return () => unsubscribe();
+
+    const unsubBranding = onSnapshot(doc(db, 'settings', 'branding'), (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        console.log('Branding loaded:', { hasLogo: !!data.logo, hasPhoto: !!data.founderPhoto });
+        if (data.logo) setLogo(data.logo);
+        if (data.founderPhoto) setFounderPhoto(data.founderPhoto);
+      }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'settings/branding');
+    });
+
+    const unsubHero = onSnapshot(doc(db, 'settings', 'hero'), (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data();
+        console.log('Hero loaded:', { hasHero: !!data.heroImage });
+        if (data.heroImage) setHeroImage(data.heroImage);
+      }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'settings/hero');
+    });
+
+    return () => {
+      unsubGlobal();
+      unsubBranding();
+      unsubHero();
+    };
   }, []);
 
   useEffect(() => {
@@ -878,27 +903,27 @@ export default function App() {
   const handleUpdatePhoto = async (photo: string) => {
     setFounderPhoto(photo);
     try {
-      await setDoc(doc(db, 'settings', 'global'), { founderPhoto: photo }, { merge: true });
+      await setDoc(doc(db, 'settings', 'branding'), { founderPhoto: photo }, { merge: true });
     } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, 'settings/global');
+      handleFirestoreError(err, OperationType.UPDATE, 'settings/branding');
     }
   };
 
   const handleUpdateLogo = async (newLogo: string) => {
     setLogo(newLogo);
     try {
-      await setDoc(doc(db, 'settings', 'global'), { logo: newLogo }, { merge: true });
+      await setDoc(doc(db, 'settings', 'branding'), { logo: newLogo }, { merge: true });
     } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, 'settings/global');
+      handleFirestoreError(err, OperationType.UPDATE, 'settings/branding');
     }
   };
 
   const handleUpdateHero = async (newHero: string) => {
     setHeroImage(newHero);
     try {
-      await setDoc(doc(db, 'settings', 'global'), { heroImage: newHero }, { merge: true });
+      await setDoc(doc(db, 'settings', 'hero'), { heroImage: newHero }, { merge: true });
     } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, 'settings/global');
+      handleFirestoreError(err, OperationType.UPDATE, 'settings/hero');
     }
   };
 
