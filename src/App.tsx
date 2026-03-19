@@ -932,13 +932,18 @@ export default function App() {
     }
   };
 
-  const handleUpdatePrices = async (newPrices: typeof DEFAULT_PRICES) => {
-    setPrices(newPrices);
+  const handleUpdateGlobalSettings = async (updates: any) => {
     try {
-      await setDoc(doc(db, 'settings', 'global'), { prices: newPrices }, { merge: true });
+      await setDoc(doc(db, 'settings', 'global'), updates, { merge: true });
+      // The onSnapshot will update the local states
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, 'settings/global');
     }
+  };
+
+  const handleUpdatePrices = async (newPrices: typeof DEFAULT_PRICES) => {
+    setPrices(newPrices);
+    return handleUpdateGlobalSettings({ prices: newPrices });
   };
 
   const handleUpdatePhoto = async (photo: string) => {
@@ -971,48 +976,37 @@ export default function App() {
   const handleUpdateHeroText = async (title: string, subtitle: string) => {
     setHeroTitle(title);
     setHeroSubtitle(subtitle);
-    try {
-      await setDoc(doc(db, 'settings', 'global'), { heroTitle: title, heroSubtitle: subtitle }, { merge: true });
-    } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, 'settings/global');
-    }
+    return handleUpdateGlobalSettings({ heroTitle: title, heroSubtitle: subtitle });
   };
 
   const handleUpdateServices = async (newServices: ServiceItem[]) => {
     setServices(newServices);
-    try {
-      await setDoc(doc(db, 'settings', 'global'), { services: newServices }, { merge: true });
-    } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, 'settings/global');
-    }
+    return handleUpdateGlobalSettings({ services: newServices });
   };
 
   const handleUpdateReviews = async (newReviews: ReviewItem[]) => {
     setReviews(newReviews);
-    try {
-      await setDoc(doc(db, 'settings', 'global'), { reviews: newReviews }, { merge: true });
-    } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, 'settings/global');
-    }
+    return handleUpdateGlobalSettings({ reviews: newReviews });
   };
 
   const handleUpdateTiktok = async (name: string) => {
     setTiktokName(name);
-    try {
-      await setDoc(doc(db, 'settings', 'global'), { tiktokName: name }, { merge: true });
-    } catch (err) {
-      handleFirestoreError(err, OperationType.UPDATE, 'settings/global');
-    }
+    return handleUpdateGlobalSettings({ tiktokName: name });
   };
 
   const handleUpdateAllReservations = async (allReservations: Reservation[]) => {
     setReservations(allReservations);
     try {
-      const batch = writeBatch(db);
-      for (const res of allReservations) {
-        batch.set(doc(db, 'reservations', res.id), res);
+      // Handle batches of 500
+      const BATCH_SIZE = 500;
+      for (let i = 0; i < allReservations.length; i += BATCH_SIZE) {
+        const batch = writeBatch(db);
+        const chunk = allReservations.slice(i, i + BATCH_SIZE);
+        for (const res of chunk) {
+          batch.set(doc(db, 'reservations', res.id), res);
+        }
+        await batch.commit();
       }
-      await batch.commit();
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, 'reservations_batch');
     }
@@ -1028,21 +1022,35 @@ export default function App() {
       const existingIds = snapshot.docs.map(d => d.id);
       const newIds = sites.map(s => s.id);
 
-      const batch = writeBatch(db);
+      // Collect all operations
+      const ops: { type: 'set' | 'delete', doc: any, data?: any }[] = [];
 
       // Delete removed sites
       for (const id of existingIds) {
         if (!newIds.includes(id)) {
-          batch.delete(doc(db, 'tourisme', id));
+          ops.push({ type: 'delete', doc: doc(db, 'tourisme', id) });
         }
       }
 
       // Update/Add sites
       for (const site of sites) {
-        batch.set(doc(db, 'tourisme', site.id), site);
+        ops.push({ type: 'set', doc: doc(db, 'tourisme', site.id), data: site });
       }
 
-      await batch.commit();
+      // Execute in batches of 500
+      const BATCH_SIZE = 500;
+      for (let i = 0; i < ops.length; i += BATCH_SIZE) {
+        const batch = writeBatch(db);
+        const chunk = ops.slice(i, i + BATCH_SIZE);
+        for (const op of chunk) {
+          if (op.type === 'set') {
+            batch.set(op.doc, op.data);
+          } else {
+            batch.delete(op.doc);
+          }
+        }
+        await batch.commit();
+      }
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, 'tourisme');
     }
@@ -1170,6 +1178,7 @@ export default function App() {
             reservations={reservations} 
             onUpdate={handleUpdateReservation}
             prices={prices}
+            onUpdateGlobalSettings={handleUpdateGlobalSettings}
             onUpdatePrices={handleUpdatePrices}
             founderPhoto={founderPhoto}
             onUpdatePhoto={handleUpdatePhoto}
@@ -2173,6 +2182,7 @@ const AdminDashboard = ({
   reservations, 
   onUpdate, 
   prices, 
+  onUpdateGlobalSettings,
   onUpdatePrices, 
   founderPhoto, 
   onUpdatePhoto,
@@ -2200,6 +2210,7 @@ const AdminDashboard = ({
   reservations: Reservation[], 
   onUpdate: (r: Reservation) => Promise<void>, 
   prices: any,
+  onUpdateGlobalSettings: (updates: any) => Promise<void>,
   onUpdatePrices: (p: any) => Promise<void>,
   founderPhoto: string | null,
   onUpdatePhoto: (p: string) => Promise<void>,
@@ -2230,6 +2241,7 @@ const AdminDashboard = ({
   const [editingRes, setEditingRes] = useState<Reservation | null>(null);
   const [editingSite, setEditingSite] = useState<TouristSite | null>(null);
   const [adminLoading, setAdminLoading] = useState<string | null>(null);
+  const [saving, setSaving] = useState<string | null>(null);
 
   // Local states for explicit saving
   const [localHeroTitle, setLocalHeroTitle] = useState(heroTitle);
@@ -2252,6 +2264,15 @@ const AdminDashboard = ({
   useEffect(() => { setLocalLogo(logo); }, [logo]);
   useEffect(() => { setLocalFounderPhoto(founderPhoto); }, [founderPhoto]);
   useEffect(() => { setLocalHeroImage(heroImage); }, [heroImage]);
+
+  const handleSave = async (id: string, promise: Promise<void>) => {
+    setSaving(id);
+    try {
+      await promise;
+    } finally {
+      setSaving(null);
+    }
+  };
 
   const addSite = () => {
     const newSite: TouristSite = {
@@ -2306,37 +2327,41 @@ const AdminDashboard = ({
           setAdminLoading("Importation des données...");
           
           const updates: Promise<any>[] = [];
+          const globalUpdates: any = {};
           
-          // Update everything
+          // Collect global settings updates
           if (data.prices) {
-            updates.push(onUpdatePrices(data.prices));
+            globalUpdates.prices = data.prices;
             setLocalPrices(data.prices);
           }
           if (data.services) {
-            updates.push(onUpdateServices(data.services));
+            globalUpdates.services = data.services;
             setLocalServices(data.services);
           }
           if (data.reviews) {
-            updates.push(onUpdateReviews(data.reviews));
+            globalUpdates.reviews = data.reviews;
             setLocalReviews(data.reviews);
-          }
-          if (data.touristSites) {
-            updates.push(onUpdateTouristSites(data.touristSites));
-          }
-          if (data.reservations) {
-            updates.push(onUpdateAllReservations(data.reservations));
           }
           
           if (data.siteConfig) {
             const config = data.siteConfig;
+            if (config.heroTitle !== undefined) {
+              globalUpdates.heroTitle = config.heroTitle;
+              setLocalHeroTitle(config.heroTitle);
+            }
+            if (config.heroSubtitle !== undefined) {
+              globalUpdates.heroSubtitle = config.heroSubtitle;
+              setLocalHeroSubtitle(config.heroSubtitle);
+            }
+            if (config.tiktokName) {
+              globalUpdates.tiktokName = config.tiktokName;
+              setLocalTiktokName(config.tiktokName);
+            }
+
+            // Other configs (separate docs)
             if (config.heroImage) {
               updates.push(onUpdateHero(config.heroImage));
               setLocalHeroImage(config.heroImage);
-            }
-            if (config.heroTitle !== undefined && config.heroSubtitle !== undefined) {
-              updates.push(onUpdateHeroText(config.heroTitle, config.heroSubtitle));
-              setLocalHeroTitle(config.heroTitle);
-              setLocalHeroSubtitle(config.heroSubtitle);
             }
             if (config.logo) {
               updates.push(onUpdateLogo(config.logo));
@@ -2346,10 +2371,19 @@ const AdminDashboard = ({
               updates.push(onUpdatePhoto(config.founderPhoto));
               setLocalFounderPhoto(config.founderPhoto);
             }
-            if (config.tiktokName) {
-              updates.push(onUpdateTiktok(config.tiktokName));
-              setLocalTiktokName(config.tiktokName);
-            }
+          }
+
+          // Push consolidated global update
+          if (Object.keys(globalUpdates).length > 0) {
+            updates.push(onUpdateGlobalSettings(globalUpdates));
+          }
+          
+          // Other collections
+          if (data.touristSites) {
+            updates.push(onUpdateTouristSites(data.touristSites));
+          }
+          if (data.reservations) {
+            updates.push(onUpdateAllReservations(data.reservations));
           }
           
           await Promise.all(updates);
@@ -2372,9 +2406,14 @@ const AdminDashboard = ({
     }
   };
 
-  const saveSite = (site: TouristSite) => {
-    onUpdateTouristSites(touristSites.map(s => s.id === site.id ? site : s));
-    setEditingSite(null);
+  const saveSite = async (site: TouristSite) => {
+    setSaving('tourisme');
+    try {
+      await onUpdateTouristSites(touristSites.map(s => s.id === site.id ? site : s));
+      setEditingSite(null);
+    } finally {
+      setSaving(null);
+    }
   };
 
   if (!user) {
@@ -2804,7 +2843,13 @@ const AdminDashboard = ({
                         />
                       </div>
                       <div className="flex gap-4">
-                        <button onClick={() => saveSite(editingSite)} className="btn-primary flex-1">Enregistrer</button>
+                        <button 
+                          disabled={saving === 'tourisme'}
+                          onClick={() => saveSite(editingSite)} 
+                          className="btn-primary flex-1 disabled:opacity-50"
+                        >
+                          {saving === 'tourisme' ? 'Enregistrement...' : 'Enregistrer'}
+                        </button>
                         <button onClick={() => setEditingSite(null)} className="btn-outline flex-1">Annuler</button>
                       </div>
                     </div>
@@ -2843,10 +2888,11 @@ const AdminDashboard = ({
                     </div>
                     <div className="flex justify-end mt-2">
                       <button 
-                        onClick={() => onUpdateHero(localHeroImage)}
-                        className="btn-primary !py-2 !px-6 text-[10px]"
+                        disabled={saving === 'hero-image'}
+                        onClick={() => handleSave('hero-image', onUpdateHero(localHeroImage))}
+                        className="btn-primary !py-2 !px-6 text-[10px] disabled:opacity-50"
                       >
-                        Enregistrer l'image hero
+                        {saving === 'hero-image' ? 'Enregistrement...' : "Enregistrer l'image hero"}
                       </button>
                     </div>
                   </div>
@@ -2874,10 +2920,11 @@ const AdminDashboard = ({
                 </div>
                 <div className="flex justify-end">
                   <button 
-                    onClick={() => onUpdateHeroText(localHeroTitle, localHeroSubtitle)}
-                    className="btn-primary !py-2 !px-6 text-[10px]"
+                    disabled={saving === 'hero-text'}
+                    onClick={() => handleSave('hero-text', onUpdateHeroText(localHeroTitle, localHeroSubtitle))}
+                    className="btn-primary !py-2 !px-6 text-[10px] disabled:opacity-50"
                   >
-                    Enregistrer les textes
+                    {saving === 'hero-text' ? 'Enregistrement...' : 'Enregistrer les textes'}
                   </button>
                 </div>
               </div>
@@ -2951,10 +2998,11 @@ const AdminDashboard = ({
               </div>
               <div className="flex justify-end mt-4">
                 <button 
-                  onClick={() => onUpdateServices(localServices)}
-                  className="btn-primary !py-2 !px-6 text-[10px]"
+                  disabled={saving === 'services'}
+                  onClick={() => handleSave('services', onUpdateServices(localServices))}
+                  className="btn-primary !py-2 !px-6 text-[10px] disabled:opacity-50"
                 >
-                  Enregistrer les services
+                  {saving === 'services' ? 'Enregistrement...' : 'Enregistrer les services'}
                 </button>
               </div>
             </div>
@@ -3026,10 +3074,11 @@ const AdminDashboard = ({
               </div>
               <div className="flex justify-end mt-4">
                 <button 
-                  onClick={() => onUpdateReviews(localReviews)}
-                  className="btn-primary !py-2 !px-6 text-[10px]"
+                  disabled={saving === 'reviews'}
+                  onClick={() => handleSave('reviews', onUpdateReviews(localReviews))}
+                  className="btn-primary !py-2 !px-6 text-[10px] disabled:opacity-50"
                 >
-                  Enregistrer les avis
+                  {saving === 'reviews' ? 'Enregistrement...' : 'Enregistrer les avis'}
                 </button>
               </div>
             </div>
@@ -3228,10 +3277,11 @@ const AdminDashboard = ({
 
                 <div className="flex justify-end mt-4">
                   <button 
-                    onClick={() => onUpdatePrices(localPrices)}
-                    className="btn-primary !py-2 !px-6 text-[10px]"
+                    disabled={saving === 'prices'}
+                    onClick={() => handleSave('prices', onUpdatePrices(localPrices))}
+                    className="btn-primary !py-2 !px-6 text-[10px] disabled:opacity-50"
                   >
-                    Enregistrer les tarifs
+                    {saving === 'prices' ? 'Enregistrement...' : 'Enregistrer les tarifs'}
                   </button>
                 </div>
               </div>
@@ -3263,10 +3313,11 @@ const AdminDashboard = ({
                       <p className="text-[10px] text-white/20 mt-2">Format PNG transparent recommandé.</p>
                       <div className="flex justify-start mt-4">
                         <button 
-                          onClick={() => onUpdateLogo(localLogo)}
-                          className="btn-primary !py-2 !px-6 text-[10px]"
+                          disabled={saving === 'logo'}
+                          onClick={() => handleSave('logo', onUpdateLogo(localLogo || ''))}
+                          className="btn-primary !py-2 !px-6 text-[10px] disabled:opacity-50"
                         >
-                          Enregistrer le logo
+                          {saving === 'logo' ? 'Enregistrement...' : 'Enregistrer le logo'}
                         </button>
                       </div>
                     </div>
@@ -3291,10 +3342,11 @@ const AdminDashboard = ({
                       <p className="text-[10px] text-white/20 mt-2">Format JPG/PNG recommandé.</p>
                       <div className="flex justify-start mt-4">
                         <button 
-                          onClick={() => onUpdatePhoto(localFounderPhoto)}
-                          className="btn-primary !py-2 !px-6 text-[10px]"
+                          disabled={saving === 'photo'}
+                          onClick={() => handleSave('photo', onUpdatePhoto(localFounderPhoto || ''))}
+                          className="btn-primary !py-2 !px-6 text-[10px] disabled:opacity-50"
                         >
-                          Enregistrer la photo
+                          {saving === 'photo' ? 'Enregistrement...' : 'Enregistrer la photo'}
                         </button>
                       </div>
                     </div>
@@ -3313,10 +3365,11 @@ const AdminDashboard = ({
                         onChange={e => setLocalTiktokName(e.target.value)} 
                       />
                       <button 
-                        onClick={() => onUpdateTiktok(localTiktokName)}
-                        className="btn-primary !py-2 !px-6 text-[10px] whitespace-nowrap"
+                        disabled={saving === 'tiktok'}
+                        onClick={() => handleSave('tiktok', onUpdateTiktok(localTiktokName))}
+                        className="btn-primary !py-2 !px-6 text-[10px] whitespace-nowrap disabled:opacity-50"
                       >
-                        Enregistrer TikTok
+                        {saving === 'tiktok' ? 'Enregistrement...' : 'Enregistrer TikTok'}
                       </button>
                     </div>
                   </div>
