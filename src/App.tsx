@@ -665,6 +665,30 @@ const DEFAULT_REVIEWS: ReviewItem[] = [
   { id: '3', name: 'Fatou K.', meta: 'Diaspora', text: "Mon vol avait 2h de retard et Khady était toujours là, souriante. Elle m'avait envoyer un message pour me dire qu'elle suivait mon vol.", rating: 5 }
 ];
 
+const DEFAULT_TOURIST_SITES: TouristSite[] = [
+  {
+    id: 'goree',
+    title: 'Île de Gorée',
+    desc: 'Un lieu chargé d\'histoire et d\'émotion, classé au patrimoine mondial de l\'UNESCO. Ses ruelles colorées et la Maison des Esclaves sont incontournables.',
+    img: 'https://images.unsplash.com/photo-1599733589046-9b8308b5b50d?auto=format&fit=crop&q=80',
+    order: 0
+  },
+  {
+    id: 'lac-rose',
+    title: 'Lac Rose',
+    desc: 'Célèbre pour sa couleur unique et sa forte salinité. Un paysage lunaire où les ramasseurs de sel s\'activent dans une ambiance hors du temps.',
+    img: 'https://images.unsplash.com/photo-1523438097201-512ae7d59c44?auto=format&fit=crop&q=80',
+    order: 1
+  },
+  {
+    id: 'bandia',
+    title: 'Réserve de Bandia',
+    desc: 'Un safari authentique à quelques kilomètres de Dakar. Observez girafes, rhinocéros, zèbres et antilopes dans leur habitat naturel.',
+    img: 'https://images.unsplash.com/photo-1516426122078-c23e76319801?auto=format&fit=crop&q=80',
+    order: 2
+  }
+];
+
 export default function App() {
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [isTrackOpen, setIsTrackOpen] = useState(false);
@@ -689,14 +713,14 @@ export default function App() {
       if (snapshot.exists()) {
         const data = snapshot.data();
         if (data.prices) setPrices(data.prices);
-        if (data.founderPhoto) setFounderPhoto(data.founderPhoto);
-        if (data.logo) setLogo(data.logo);
-        if (data.heroImage) setHeroImage(data.heroImage);
-        if (data.heroTitle) setHeroTitle(data.heroTitle);
-        if (data.heroSubtitle) setHeroSubtitle(data.heroSubtitle);
+        setFounderPhoto(data.founderPhoto || null);
+        setLogo(data.logo || null);
+        setHeroImage(data.heroImage || 'https://pepiniere.sn/wp-content/uploads/2025/03/baobab.webp');
+        setHeroTitle(data.heroTitle || "Plus qu'un trajet,\nune relation\nde confiance.");
+        setHeroSubtitle(data.heroSubtitle || "🇸🇳 Service Premium — Dakar & Environs");
         if (data.services) setServices(data.services);
         if (data.reviews) setReviews(data.reviews);
-        if (data.tiktokName) setTiktokName(data.tiktokName);
+        setTiktokName(data.tiktokName || 'EllesDrives');
       } else {
         // Initialize settings if they don't exist
         const initialSettings = {
@@ -706,7 +730,9 @@ export default function App() {
           heroImage: 'https://pepiniere.sn/wp-content/uploads/2025/03/baobab.webp',
           heroTitle: "Plus qu'un trajet,\nune relation\nde confiance.",
           heroSubtitle: "🇸🇳 Service Premium — Dakar & Environs",
-          tiktokName: 'EllesDrives'
+          tiktokName: 'EllesDrives',
+          founderPhoto: null,
+          logo: null
         };
         setDoc(docRef, initialSettings).catch(err => {
           handleFirestoreError(err, OperationType.WRITE, 'settings/global');
@@ -721,6 +747,15 @@ export default function App() {
   useEffect(() => {
     const q = query(collection(db, 'tourisme'), orderBy('order', 'asc'));
     const unsubscribe = onSnapshot(q, (snapshot) => {
+      if (snapshot.empty && user && user.email === 'dioufkhady28@gmail.com') {
+        // Seed if empty and admin is logged in
+        const batch = writeBatch(db);
+        DEFAULT_TOURIST_SITES.forEach(site => {
+          batch.set(doc(db, 'tourisme', site.id), site);
+        });
+        batch.commit().catch(err => handleFirestoreError(err, OperationType.WRITE, 'tourisme'));
+      }
+      
       const docs = snapshot.docs.map(doc => ({
         ...doc.data(),
         id: doc.id
@@ -731,7 +766,7 @@ export default function App() {
       handleFirestoreError(error, OperationType.LIST, 'tourisme');
     });
     return () => unsubscribe();
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     if (!user) {
@@ -834,7 +869,7 @@ export default function App() {
   const handleUpdatePrices = async (newPrices: typeof DEFAULT_PRICES) => {
     setPrices(newPrices);
     try {
-      await updateDoc(doc(db, 'settings', 'global'), { prices: newPrices });
+      await setDoc(doc(db, 'settings', 'global'), { prices: newPrices }, { merge: true });
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, 'settings/global');
     }
@@ -843,7 +878,7 @@ export default function App() {
   const handleUpdatePhoto = async (photo: string) => {
     setFounderPhoto(photo);
     try {
-      await updateDoc(doc(db, 'settings', 'global'), { founderPhoto: photo });
+      await setDoc(doc(db, 'settings', 'global'), { founderPhoto: photo }, { merge: true });
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, 'settings/global');
     }
@@ -852,7 +887,7 @@ export default function App() {
   const handleUpdateLogo = async (newLogo: string) => {
     setLogo(newLogo);
     try {
-      await updateDoc(doc(db, 'settings', 'global'), { logo: newLogo });
+      await setDoc(doc(db, 'settings', 'global'), { logo: newLogo }, { merge: true });
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, 'settings/global');
     }
@@ -861,7 +896,7 @@ export default function App() {
   const handleUpdateHero = async (newHero: string) => {
     setHeroImage(newHero);
     try {
-      await updateDoc(doc(db, 'settings', 'global'), { heroImage: newHero });
+      await setDoc(doc(db, 'settings', 'global'), { heroImage: newHero }, { merge: true });
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, 'settings/global');
     }
@@ -871,7 +906,7 @@ export default function App() {
     setHeroTitle(title);
     setHeroSubtitle(subtitle);
     try {
-      await updateDoc(doc(db, 'settings', 'global'), { heroTitle: title, heroSubtitle: subtitle });
+      await setDoc(doc(db, 'settings', 'global'), { heroTitle: title, heroSubtitle: subtitle }, { merge: true });
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, 'settings/global');
     }
@@ -880,7 +915,7 @@ export default function App() {
   const handleUpdateServices = async (newServices: ServiceItem[]) => {
     setServices(newServices);
     try {
-      await updateDoc(doc(db, 'settings', 'global'), { services: newServices });
+      await setDoc(doc(db, 'settings', 'global'), { services: newServices }, { merge: true });
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, 'settings/global');
     }
@@ -889,7 +924,7 @@ export default function App() {
   const handleUpdateReviews = async (newReviews: ReviewItem[]) => {
     setReviews(newReviews);
     try {
-      await updateDoc(doc(db, 'settings', 'global'), { reviews: newReviews });
+      await setDoc(doc(db, 'settings', 'global'), { reviews: newReviews }, { merge: true });
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, 'settings/global');
     }
@@ -898,7 +933,7 @@ export default function App() {
   const handleUpdateTiktok = async (name: string) => {
     setTiktokName(name);
     try {
-      await updateDoc(doc(db, 'settings', 'global'), { tiktokName: name });
+      await setDoc(doc(db, 'settings', 'global'), { tiktokName: name }, { merge: true });
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, 'settings/global');
     }
@@ -2157,6 +2192,45 @@ const AdminDashboard = ({
     URL.revokeObjectURL(url);
   };
 
+  const handleImportData = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        try {
+          const data = JSON.parse(event.target?.result as string);
+          
+          // Update everything
+          if (data.prices) onUpdatePrices(data.prices);
+          if (data.services) onUpdateServices(data.services);
+          if (data.reviews) onUpdateReviews(data.reviews);
+          if (data.touristSites) onUpdateTouristSites(data.touristSites);
+          
+          if (data.siteConfig) {
+            const config = data.siteConfig;
+            if (config.heroImage) onUpdateHero(config.heroImage);
+            if (config.heroTitle && config.heroSubtitle) onUpdateHeroText(config.heroTitle, config.heroSubtitle);
+            if (config.logo) onUpdateLogo(config.logo);
+            if (config.founderPhoto) onUpdatePhoto(config.founderPhoto);
+            if (config.tiktokName) onUpdateTiktok(config.tiktokName);
+          }
+          
+          alert("Données importées avec succès !");
+        } catch (err) {
+          console.error(err);
+          alert("Erreur lors de l'importation du fichier JSON.");
+        }
+      };
+      reader.readAsText(file);
+    }
+  };
+
+  const handleResetTouristSites = () => {
+    if (window.confirm("Voulez-vous vraiment réinitialiser les sites touristiques aux valeurs par défaut ?")) {
+      onUpdateTouristSites(DEFAULT_TOURIST_SITES);
+    }
+  };
+
   const saveSite = (site: TouristSite) => {
     onUpdateTouristSites(touristSites.map(s => s.id === site.id ? site : s));
     setEditingSite(null);
@@ -2502,7 +2576,10 @@ const AdminDashboard = ({
                 <Camera className="text-gold" />
                 <h3 className="font-serif text-2xl text-white">Gestion Tourisme</h3>
               </div>
-              <button onClick={addSite} className="btn-primary !py-2 !px-4 text-[10px]">Ajouter un site</button>
+              <div className="flex gap-4">
+                <button onClick={handleResetTouristSites} className="text-[10px] text-white/20 hover:text-gold uppercase tracking-widest">Réinitialiser</button>
+                <button onClick={addSite} className="btn-primary !py-2 !px-4 text-[10px]">Ajouter un site</button>
+              </div>
             </div>
 
             <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -3055,12 +3132,18 @@ const AdminDashboard = ({
                 <p className="text-white/60 text-sm mb-6 max-w-2xl">
                   Téléchargez une copie complète de toutes vos données (réservations, tarifs, services, avis et configuration du site) au format JSON. Ce fichier peut être utilisé pour restaurer vos données ou les consulter hors-ligne.
                 </p>
-                <button 
-                  onClick={handleExportData}
-                  className="btn-primary flex items-center gap-3"
-                >
-                  <Upload className="rotate-180" size={18} /> Exporter toutes les données
-                </button>
+                <div className="flex flex-wrap gap-4">
+                  <button 
+                    onClick={handleExportData}
+                    className="btn-primary flex items-center gap-3"
+                  >
+                    <Upload className="rotate-180" size={18} /> Exporter toutes les données
+                  </button>
+                  <label className="btn-outline cursor-pointer flex items-center gap-3">
+                    <Upload size={18} /> Importer / Restaurer
+                    <input type="file" accept=".json" className="hidden" onChange={handleImportData} />
+                  </label>
+                </div>
               </div>
 
               <div className="h-px bg-white/10" />
