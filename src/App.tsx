@@ -188,12 +188,12 @@ class ErrorBoundary extends (Component as any) {
 // --- Components ---
 
 const Logo = ({ className = "", src = null }: { className?: string, src?: string | null }) => {
-  const displaySrc = src || (DEFAULT_LOGO.length > 100 ? DEFAULT_LOGO : null);
+  const displaySrc = src || DEFAULT_LOGO;
   
   return (
     <div className={`flex items-center gap-3 group ${className}`}>
       <div className="relative w-12 h-12 flex items-center justify-center">
-        {displaySrc ? (
+        {displaySrc && displaySrc.length > 10 ? (
           <img src={displaySrc} alt="Logo" className="w-full h-full object-contain" referrerPolicy="no-referrer" />
         ) : (
           <>
@@ -769,8 +769,8 @@ export default function App() {
       if (snapshot.exists()) {
         const data = snapshot.data();
         console.log('Branding loaded:', { hasLogo: !!data.logo, hasPhoto: !!data.founderPhoto });
-        if (data.logo) setLogo(data.logo);
-        if (data.founderPhoto) setFounderPhoto(data.founderPhoto);
+        setLogo(data.logo || null);
+        setFounderPhoto(data.founderPhoto || null);
       } else if (user && user.email === 'dioufkhady28@gmail.com') {
         console.log('Initializing branding settings...');
         setDoc(doc(db, 'settings', 'branding'), { logo: null, founderPhoto: null }, { merge: true })
@@ -784,7 +784,7 @@ export default function App() {
       if (snapshot.exists()) {
         const data = snapshot.data();
         console.log('Hero loaded:', { hasHero: !!data.heroImage });
-        if (data.heroImage) setHeroImage(data.heroImage);
+        setHeroImage(data.heroImage || 'https://pepiniere.sn/wp-content/uploads/2025/03/baobab.webp');
       } else if (user && user.email === 'dioufkhady28@gmail.com') {
         console.log('Initializing hero settings...');
         setDoc(doc(db, 'settings', 'hero'), { heroImage: 'https://pepiniere.sn/wp-content/uploads/2025/03/baobab.webp' }, { merge: true })
@@ -2215,6 +2215,28 @@ const AdminDashboard = ({
   const [editingSite, setEditingSite] = useState<TouristSite | null>(null);
   const [isCompressing, setIsCompressing] = useState(false);
 
+  // Local states for explicit saving
+  const [localHeroTitle, setLocalHeroTitle] = useState(heroTitle);
+  const [localHeroSubtitle, setLocalHeroSubtitle] = useState(heroSubtitle);
+  const [localServices, setLocalServices] = useState(services);
+  const [localReviews, setLocalReviews] = useState(reviews);
+  const [localPrices, setLocalPrices] = useState(prices);
+  const [localTiktokName, setLocalTiktokName] = useState(tiktokName);
+  const [localLogo, setLocalLogo] = useState(logo);
+  const [localFounderPhoto, setLocalFounderPhoto] = useState(founderPhoto);
+  const [localHeroImage, setLocalHeroImage] = useState(heroImage);
+
+  // Sync local state when props change (initial load or remote updates)
+  useEffect(() => { setLocalHeroTitle(heroTitle); }, [heroTitle]);
+  useEffect(() => { setLocalHeroSubtitle(heroSubtitle); }, [heroSubtitle]);
+  useEffect(() => { setLocalServices(services); }, [services]);
+  useEffect(() => { setLocalReviews(reviews); }, [reviews]);
+  useEffect(() => { setLocalPrices(prices); }, [prices]);
+  useEffect(() => { setLocalTiktokName(tiktokName); }, [tiktokName]);
+  useEffect(() => { setLocalLogo(logo); }, [logo]);
+  useEffect(() => { setLocalFounderPhoto(founderPhoto); }, [founderPhoto]);
+  useEffect(() => { setLocalHeroImage(heroImage); }, [heroImage]);
+
   const addSite = () => {
     const newSite: TouristSite = {
       id: Date.now().toString(),
@@ -2331,7 +2353,7 @@ const AdminDashboard = ({
       const reader = new FileReader();
       reader.onloadend = async () => {
         const compressed = await compressImage(reader.result as string, 800, 800, 0.8);
-        onUpdatePhoto(compressed);
+        setLocalFounderPhoto(compressed);
         setIsCompressing(false);
       };
       reader.readAsDataURL(file);
@@ -2345,7 +2367,7 @@ const AdminDashboard = ({
       const reader = new FileReader();
       reader.onloadend = async () => {
         const compressed = await compressImage(reader.result as string, 400, 400, 0.9);
-        onUpdateLogo(compressed);
+        setLocalLogo(compressed);
         setIsCompressing(false);
       };
       reader.readAsDataURL(file);
@@ -2359,7 +2381,7 @@ const AdminDashboard = ({
       const reader = new FileReader();
       reader.onloadend = async () => {
         const compressed = await compressImage(reader.result as string, 1920, 1080, 0.7);
-        onUpdateHero(compressed);
+        setLocalHeroImage(compressed);
         setIsCompressing(false);
       };
       reader.readAsDataURL(file);
@@ -2752,7 +2774,7 @@ const AdminDashboard = ({
                   <h4 className="text-gold text-xs uppercase tracking-widest mb-4">Image d'arrière-plan</h4>
                   <div className="flex flex-col gap-4">
                     <div className="aspect-video w-full rounded-sm border border-gold/20 bg-gold/5 flex items-center justify-center overflow-hidden">
-                      <img src={heroImage} alt="Hero Preview" className="w-full h-full object-cover" />
+                      <img src={localHeroImage} alt="Hero Preview" className="w-full h-full object-cover" />
                     </div>
                     <div className="flex items-center gap-4">
                       <label className="btn-outline cursor-pointer inline-flex items-center gap-2 text-[10px] flex-1 justify-center">
@@ -2760,10 +2782,18 @@ const AdminDashboard = ({
                         <input type="file" accept="image/*" className="hidden" onChange={handleHeroUpload} />
                       </label>
                       <button 
-                        onClick={() => onUpdateHero('https://pepiniere.sn/wp-content/uploads/2025/03/baobab.webp')}
+                        onClick={() => setLocalHeroImage('https://pepiniere.sn/wp-content/uploads/2025/03/baobab.webp')}
                         className="text-[10px] text-white/40 hover:text-gold transition-colors"
                       >
                         Réinitialiser (Baobab)
+                      </button>
+                    </div>
+                    <div className="flex justify-end mt-2">
+                      <button 
+                        onClick={() => onUpdateHero(localHeroImage)}
+                        className="btn-primary !py-2 !px-6 text-[10px]"
+                      >
+                        Enregistrer l'image hero
                       </button>
                     </div>
                   </div>
@@ -2774,20 +2804,28 @@ const AdminDashboard = ({
                     <label className="text-[10px] text-white/40 uppercase">Slogan (Badge)</label>
                     <input 
                       type="text" 
-                      value={heroSubtitle} 
+                      value={localHeroSubtitle} 
                       className="input-field" 
-                      onChange={e => onUpdateHeroText(heroTitle, e.target.value)} 
+                      onChange={e => setLocalHeroSubtitle(e.target.value)} 
                     />
                   </div>
                   <div className="space-y-1">
                     <label className="text-[10px] text-white/40 uppercase">Titre Principal (Utilisez \n pour les retours à la ligne)</label>
                     <textarea 
-                      value={heroTitle} 
+                      value={localHeroTitle} 
                       rows={3}
                       className="input-field resize-none" 
-                      onChange={e => onUpdateHeroText(e.target.value, heroSubtitle)} 
+                      onChange={e => setLocalHeroTitle(e.target.value)} 
                     />
                   </div>
+                </div>
+                <div className="flex justify-end">
+                  <button 
+                    onClick={() => onUpdateHeroText(localHeroTitle, localHeroSubtitle)}
+                    className="btn-primary !py-2 !px-6 text-[10px]"
+                  >
+                    Enregistrer les textes
+                  </button>
                 </div>
               </div>
             </div>
@@ -2800,7 +2838,7 @@ const AdminDashboard = ({
               </div>
 
               <div className="grid md:grid-cols-3 gap-6">
-                {services.map((s, idx) => (
+                {localServices.map((s, idx) => (
                   <div key={s.id} className="bg-white/5 border border-gold/15 p-6 rounded-sm space-y-4">
                     <div className="flex items-center justify-between">
                       <span className="text-gold text-[10px] uppercase tracking-widest">Service {idx + 1}</span>
@@ -2809,9 +2847,9 @@ const AdminDashboard = ({
                           value={s.icon} 
                           className="bg-dark border border-gold/20 text-white text-[10px] rounded p-1"
                           onChange={e => {
-                            const updated = [...services];
+                            const updated = [...localServices];
                             updated[idx] = { ...s, icon: e.target.value as any };
-                            onUpdateServices(updated);
+                            setLocalServices(updated);
                           }}
                         >
                           <option value="plane">Avion</option>
@@ -2827,9 +2865,9 @@ const AdminDashboard = ({
                         className="input-field text-sm" 
                         placeholder="Titre"
                         onChange={e => {
-                          const updated = [...services];
+                          const updated = [...localServices];
                           updated[idx] = { ...s, title: e.target.value };
-                          onUpdateServices(updated);
+                          setLocalServices(updated);
                         }}
                       />
                       <textarea 
@@ -2838,9 +2876,9 @@ const AdminDashboard = ({
                         className="input-field text-xs resize-none" 
                         placeholder="Description"
                         onChange={e => {
-                          const updated = [...services];
+                          const updated = [...localServices];
                           updated[idx] = { ...s, desc: e.target.value };
-                          onUpdateServices(updated);
+                          setLocalServices(updated);
                         }}
                       />
                       <input 
@@ -2849,14 +2887,22 @@ const AdminDashboard = ({
                         className="input-field text-xs" 
                         placeholder="Prix (ex: À partir de...)"
                         onChange={e => {
-                          const updated = [...services];
+                          const updated = [...localServices];
                           updated[idx] = { ...s, price: e.target.value };
-                          onUpdateServices(updated);
+                          setLocalServices(updated);
                         }}
                       />
                     </div>
                   </div>
                 ))}
+              </div>
+              <div className="flex justify-end mt-4">
+                <button 
+                  onClick={() => onUpdateServices(localServices)}
+                  className="btn-primary !py-2 !px-6 text-[10px]"
+                >
+                  Enregistrer les services
+                </button>
               </div>
             </div>
 
@@ -2868,7 +2914,7 @@ const AdminDashboard = ({
               </div>
 
               <div className="grid md:grid-cols-3 gap-6">
-                {reviews.map((r, idx) => (
+                {localReviews.map((r, idx) => (
                   <div key={r.id} className="bg-white/5 border border-gold/15 p-6 rounded-sm space-y-4">
                     <div className="flex items-center justify-between">
                       <span className="text-gold text-[10px] uppercase tracking-widest">Avis {idx + 1}</span>
@@ -2877,9 +2923,9 @@ const AdminDashboard = ({
                           <button 
                             key={star}
                             onClick={() => {
-                              const updated = [...reviews];
+                              const updated = [...localReviews];
                               updated[idx] = { ...r, rating: star };
-                              onUpdateReviews(updated);
+                              setLocalReviews(updated);
                             }}
                           >
                             <Star size={10} className={star <= r.rating ? "fill-gold text-gold" : "text-white/20"} />
@@ -2894,9 +2940,9 @@ const AdminDashboard = ({
                         className="input-field text-sm" 
                         placeholder="Nom"
                         onChange={e => {
-                          const updated = [...reviews];
+                          const updated = [...localReviews];
                           updated[idx] = { ...r, name: e.target.value };
-                          onUpdateReviews(updated);
+                          setLocalReviews(updated);
                         }}
                       />
                       <input 
@@ -2905,9 +2951,9 @@ const AdminDashboard = ({
                         className="input-field text-xs" 
                         placeholder="Méta (ex: Paris → Dakar)"
                         onChange={e => {
-                          const updated = [...reviews];
+                          const updated = [...localReviews];
                           updated[idx] = { ...r, meta: e.target.value };
-                          onUpdateReviews(updated);
+                          setLocalReviews(updated);
                         }}
                       />
                       <textarea 
@@ -2916,14 +2962,22 @@ const AdminDashboard = ({
                         className="input-field text-xs resize-none" 
                         placeholder="Commentaire"
                         onChange={e => {
-                          const updated = [...reviews];
+                          const updated = [...localReviews];
                           updated[idx] = { ...r, text: e.target.value };
-                          onUpdateReviews(updated);
+                          setLocalReviews(updated);
                         }}
                       />
                     </div>
                   </div>
                 ))}
+              </div>
+              <div className="flex justify-end mt-4">
+                <button 
+                  onClick={() => onUpdateReviews(localReviews)}
+                  className="btn-primary !py-2 !px-6 text-[10px]"
+                >
+                  Enregistrer les avis
+                </button>
               </div>
             </div>
           </div>
@@ -2942,63 +2996,63 @@ const AdminDashboard = ({
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1">
                       <label className="text-[10px] text-white/40 uppercase">Dakar Centre</label>
-                      <input type="number" value={prices.transfert.dakarCentre} className="input-field" onChange={e => onUpdatePrices({...prices, transfert: {...prices.transfert, dakarCentre: parseInt(e.target.value)}})} />
+                      <input type="number" value={localPrices.transfert.dakarCentre} className="input-field" onChange={e => setLocalPrices({...localPrices, transfert: {...localPrices.transfert, dakarCentre: parseInt(e.target.value)}})} />
                     </div>
                     <div className="space-y-1">
                       <label className="text-[10px] text-white/40 uppercase">Almadies / Ngor</label>
-                      <input type="number" value={prices.transfert.almadies} className="input-field" onChange={e => onUpdatePrices({...prices, transfert: {...prices.transfert, almadies: parseInt(e.target.value)}})} />
+                      <input type="number" value={localPrices.transfert.almadies} className="input-field" onChange={e => setLocalPrices({...localPrices, transfert: {...localPrices.transfert, almadies: parseInt(e.target.value)}})} />
                     </div>
                     <div className="space-y-1">
                       <label className="text-[10px] text-white/40 uppercase">Diamniadio</label>
-                      <input type="number" value={prices.transfert.diamniadio} className="input-field" onChange={e => onUpdatePrices({...prices, transfert: {...prices.transfert, diamniadio: parseInt(e.target.value)}})} />
+                      <input type="number" value={localPrices.transfert.diamniadio} className="input-field" onChange={e => setLocalPrices({...localPrices, transfert: {...localPrices.transfert, diamniadio: parseInt(e.target.value)}})} />
                     </div>
                     <div className="space-y-1">
                       <label className="text-[10px] text-white/40 uppercase">Saly / Mbour</label>
-                      <input type="number" value={prices.transfert.saly} className="input-field" onChange={e => onUpdatePrices({...prices, transfert: {...prices.transfert, saly: parseInt(e.target.value)}})} />
+                      <input type="number" value={localPrices.transfert.saly} className="input-field" onChange={e => setLocalPrices({...localPrices, transfert: {...localPrices.transfert, saly: parseInt(e.target.value)}})} />
                     </div>
                     <div className="space-y-1">
                       <label className="text-[10px] text-white/40 uppercase">Bandia</label>
-                      <input type="number" value={prices.transfert.bandia} className="input-field" onChange={e => onUpdatePrices({...prices, transfert: {...prices.transfert, bandia: parseInt(e.target.value)}})} />
+                      <input type="number" value={localPrices.transfert.bandia} className="input-field" onChange={e => setLocalPrices({...localPrices, transfert: {...localPrices.transfert, bandia: parseInt(e.target.value)}})} />
                     </div>
                     <div className="space-y-1">
                       <label className="text-[10px] text-white/40 uppercase">Lompoul</label>
-                      <input type="number" value={prices.transfert.lompoul} className="input-field" onChange={e => onUpdatePrices({...prices, transfert: {...prices.transfert, lompoul: parseInt(e.target.value)}})} />
+                      <input type="number" value={localPrices.transfert.lompoul} className="input-field" onChange={e => setLocalPrices({...localPrices, transfert: {...localPrices.transfert, lompoul: parseInt(e.target.value)}})} />
                     </div>
                     <div className="space-y-1">
                       <label className="text-[10px] text-white/40 uppercase">Thiès</label>
-                      <input type="number" value={prices.transfert.thies} className="input-field" onChange={e => onUpdatePrices({...prices, transfert: {...prices.transfert, thies: parseInt(e.target.value)}})} />
+                      <input type="number" value={localPrices.transfert.thies} className="input-field" onChange={e => setLocalPrices({...localPrices, transfert: {...localPrices.transfert, thies: parseInt(e.target.value)}})} />
                     </div>
                     <div className="space-y-1">
                       <label className="text-[10px] text-white/40 uppercase">Saint Louis</label>
-                      <input type="number" value={prices.transfert.saintLouis} className="input-field" onChange={e => onUpdatePrices({...prices, transfert: {...prices.transfert, saintLouis: parseInt(e.target.value)}})} />
+                      <input type="number" value={localPrices.transfert.saintLouis} className="input-field" onChange={e => setLocalPrices({...localPrices, transfert: {...localPrices.transfert, saintLouis: parseInt(e.target.value)}})} />
                     </div>
                     <div className="space-y-1">
                       <label className="text-[10px] text-white/40 uppercase">Louga</label>
-                      <input type="number" value={prices.transfert.louga} className="input-field" onChange={e => onUpdatePrices({...prices, transfert: {...prices.transfert, louga: parseInt(e.target.value)}})} />
+                      <input type="number" value={localPrices.transfert.louga} className="input-field" onChange={e => setLocalPrices({...localPrices, transfert: {...localPrices.transfert, louga: parseInt(e.target.value)}})} />
                     </div>
                     <div className="space-y-1">
                       <label className="text-[10px] text-white/40 uppercase">Kaolack</label>
-                      <input type="number" value={prices.transfert.kaolack} className="input-field" onChange={e => onUpdatePrices({...prices, transfert: {...prices.transfert, kaolack: parseInt(e.target.value)}})} />
+                      <input type="number" value={localPrices.transfert.kaolack} className="input-field" onChange={e => setLocalPrices({...localPrices, transfert: {...localPrices.transfert, kaolack: parseInt(e.target.value)}})} />
                     </div>
                     <div className="space-y-1">
                       <label className="text-[10px] text-white/40 uppercase">Somone</label>
-                      <input type="number" value={prices.transfert.somone} className="input-field" onChange={e => onUpdatePrices({...prices, transfert: {...prices.transfert, somone: parseInt(e.target.value)}})} />
+                      <input type="number" value={localPrices.transfert.somone} className="input-field" onChange={e => setLocalPrices({...localPrices, transfert: {...localPrices.transfert, somone: parseInt(e.target.value)}})} />
                     </div>
                     <div className="space-y-1">
                       <label className="text-[10px] text-white/40 uppercase">Lac Rose</label>
-                      <input type="number" value={prices.transfert.lacRose} className="input-field" onChange={e => onUpdatePrices({...prices, transfert: {...prices.transfert, lacRose: parseInt(e.target.value)}})} />
+                      <input type="number" value={localPrices.transfert.lacRose} className="input-field" onChange={e => setLocalPrices({...localPrices, transfert: {...localPrices.transfert, lacRose: parseInt(e.target.value)}})} />
                     </div>
                     <div className="space-y-1">
                       <label className="text-[10px] text-white/40 uppercase">Saloum</label>
-                      <input type="number" value={prices.transfert.saloum} className="input-field" onChange={e => onUpdatePrices({...prices, transfert: {...prices.transfert, saloum: parseInt(e.target.value)}})} />
+                      <input type="number" value={localPrices.transfert.saloum} className="input-field" onChange={e => setLocalPrices({...localPrices, transfert: {...localPrices.transfert, saloum: parseInt(e.target.value)}})} />
                     </div>
                     <div className="space-y-1">
                       <label className="text-[10px] text-white/40 uppercase">Touba</label>
-                      <input type="number" value={prices.transfert.touba} className="input-field" onChange={e => onUpdatePrices({...prices, transfert: {...prices.transfert, touba: parseInt(e.target.value)}})} />
+                      <input type="number" value={localPrices.transfert.touba} className="input-field" onChange={e => setLocalPrices({...localPrices, transfert: {...localPrices.transfert, touba: parseInt(e.target.value)}})} />
                     </div>
                     <div className="space-y-1">
                       <label className="text-[10px] text-white/40 uppercase">Tivaouane</label>
-                      <input type="number" value={prices.transfert.tivaouane} className="input-field" onChange={e => onUpdatePrices({...prices, transfert: {...prices.transfert, tivaouane: parseInt(e.target.value)}})} />
+                      <input type="number" value={localPrices.transfert.tivaouane} className="input-field" onChange={e => setLocalPrices({...localPrices, transfert: {...localPrices.transfert, tivaouane: parseInt(e.target.value)}})} />
                     </div>
                   </div>
                 </div>
@@ -3008,63 +3062,63 @@ const AdminDashboard = ({
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1">
                       <label className="text-[10px] text-white/40 uppercase">Dakar Centre (+)</label>
-                      <input type="number" value={prices.transfert.dakarCentreSUV} className="input-field" onChange={e => onUpdatePrices({...prices, transfert: {...prices.transfert, dakarCentreSUV: parseInt(e.target.value)}})} />
+                      <input type="number" value={localPrices.transfert.dakarCentreSUV} className="input-field" onChange={e => setLocalPrices({...localPrices, transfert: {...localPrices.transfert, dakarCentreSUV: parseInt(e.target.value)}})} />
                     </div>
                     <div className="space-y-1">
                       <label className="text-[10px] text-white/40 uppercase">Almadies / Ngor (+)</label>
-                      <input type="number" value={prices.transfert.almadiesSUV} className="input-field" onChange={e => onUpdatePrices({...prices, transfert: {...prices.transfert, almadiesSUV: parseInt(e.target.value)}})} />
+                      <input type="number" value={localPrices.transfert.almadiesSUV} className="input-field" onChange={e => setLocalPrices({...localPrices, transfert: {...localPrices.transfert, almadiesSUV: parseInt(e.target.value)}})} />
                     </div>
                     <div className="space-y-1">
                       <label className="text-[10px] text-white/40 uppercase">Diamniadio (+)</label>
-                      <input type="number" value={prices.transfert.diamniadioSUV} className="input-field" onChange={e => onUpdatePrices({...prices, transfert: {...prices.transfert, diamniadioSUV: parseInt(e.target.value)}})} />
+                      <input type="number" value={localPrices.transfert.diamniadioSUV} className="input-field" onChange={e => setLocalPrices({...localPrices, transfert: {...localPrices.transfert, diamniadioSUV: parseInt(e.target.value)}})} />
                     </div>
                     <div className="space-y-1">
                       <label className="text-[10px] text-white/40 uppercase">Saly / Mbour (+)</label>
-                      <input type="number" value={prices.transfert.salySUV} className="input-field" onChange={e => onUpdatePrices({...prices, transfert: {...prices.transfert, salySUV: parseInt(e.target.value)}})} />
+                      <input type="number" value={localPrices.transfert.salySUV} className="input-field" onChange={e => setLocalPrices({...localPrices, transfert: {...localPrices.transfert, salySUV: parseInt(e.target.value)}})} />
                     </div>
                     <div className="space-y-1">
                       <label className="text-[10px] text-white/40 uppercase">Bandia (+)</label>
-                      <input type="number" value={prices.transfert.bandiaSUV} className="input-field" onChange={e => onUpdatePrices({...prices, transfert: {...prices.transfert, bandiaSUV: parseInt(e.target.value)}})} />
+                      <input type="number" value={localPrices.transfert.bandiaSUV} className="input-field" onChange={e => setLocalPrices({...localPrices, transfert: {...localPrices.transfert, bandiaSUV: parseInt(e.target.value)}})} />
                     </div>
                     <div className="space-y-1">
                       <label className="text-[10px] text-white/40 uppercase">Lompoul (+)</label>
-                      <input type="number" value={prices.transfert.lompoulSUV} className="input-field" onChange={e => onUpdatePrices({...prices, transfert: {...prices.transfert, lompoulSUV: parseInt(e.target.value)}})} />
+                      <input type="number" value={localPrices.transfert.lompoulSUV} className="input-field" onChange={e => setLocalPrices({...localPrices, transfert: {...localPrices.transfert, lompoulSUV: parseInt(e.target.value)}})} />
                     </div>
                     <div className="space-y-1">
                       <label className="text-[10px] text-white/40 uppercase">Thiès (+)</label>
-                      <input type="number" value={prices.transfert.thiesSUV} className="input-field" onChange={e => onUpdatePrices({...prices, transfert: {...prices.transfert, thiesSUV: parseInt(e.target.value)}})} />
+                      <input type="number" value={localPrices.transfert.thiesSUV} className="input-field" onChange={e => setLocalPrices({...localPrices, transfert: {...localPrices.transfert, thiesSUV: parseInt(e.target.value)}})} />
                     </div>
                     <div className="space-y-1">
                       <label className="text-[10px] text-white/40 uppercase">Saint Louis (+)</label>
-                      <input type="number" value={prices.transfert.saintLouisSUV} className="input-field" onChange={e => onUpdatePrices({...prices, transfert: {...prices.transfert, saintLouisSUV: parseInt(e.target.value)}})} />
+                      <input type="number" value={localPrices.transfert.saintLouisSUV} className="input-field" onChange={e => setLocalPrices({...localPrices, transfert: {...localPrices.transfert, saintLouisSUV: parseInt(e.target.value)}})} />
                     </div>
                     <div className="space-y-1">
                       <label className="text-[10px] text-white/40 uppercase">Louga (+)</label>
-                      <input type="number" value={prices.transfert.lougaSUV} className="input-field" onChange={e => onUpdatePrices({...prices, transfert: {...prices.transfert, lougaSUV: parseInt(e.target.value)}})} />
+                      <input type="number" value={localPrices.transfert.lougaSUV} className="input-field" onChange={e => setLocalPrices({...localPrices, transfert: {...localPrices.transfert, lougaSUV: parseInt(e.target.value)}})} />
                     </div>
                     <div className="space-y-1">
                       <label className="text-[10px] text-white/40 uppercase">Kaolack (+)</label>
-                      <input type="number" value={prices.transfert.kaolackSUV} className="input-field" onChange={e => onUpdatePrices({...prices, transfert: {...prices.transfert, kaolackSUV: parseInt(e.target.value)}})} />
+                      <input type="number" value={localPrices.transfert.kaolackSUV} className="input-field" onChange={e => setLocalPrices({...localPrices, transfert: {...localPrices.transfert, kaolackSUV: parseInt(e.target.value)}})} />
                     </div>
                     <div className="space-y-1">
                       <label className="text-[10px] text-white/40 uppercase">Somone (+)</label>
-                      <input type="number" value={prices.transfert.somoneSUV} className="input-field" onChange={e => onUpdatePrices({...prices, transfert: {...prices.transfert, somoneSUV: parseInt(e.target.value)}})} />
+                      <input type="number" value={localPrices.transfert.somoneSUV} className="input-field" onChange={e => setLocalPrices({...localPrices, transfert: {...localPrices.transfert, somoneSUV: parseInt(e.target.value)}})} />
                     </div>
                     <div className="space-y-1">
                       <label className="text-[10px] text-white/40 uppercase">Lac Rose (+)</label>
-                      <input type="number" value={prices.transfert.lacRoseSUV} className="input-field" onChange={e => onUpdatePrices({...prices, transfert: {...prices.transfert, lacRoseSUV: parseInt(e.target.value)}})} />
+                      <input type="number" value={localPrices.transfert.lacRoseSUV} className="input-field" onChange={e => setLocalPrices({...localPrices, transfert: {...localPrices.transfert, lacRoseSUV: parseInt(e.target.value)}})} />
                     </div>
                     <div className="space-y-1">
                       <label className="text-[10px] text-white/40 uppercase">Saloum (+)</label>
-                      <input type="number" value={prices.transfert.saloumSUV} className="input-field" onChange={e => onUpdatePrices({...prices, transfert: {...prices.transfert, saloumSUV: parseInt(e.target.value)}})} />
+                      <input type="number" value={localPrices.transfert.saloumSUV} className="input-field" onChange={e => setLocalPrices({...localPrices, transfert: {...localPrices.transfert, saloumSUV: parseInt(e.target.value)}})} />
                     </div>
                     <div className="space-y-1">
                       <label className="text-[10px] text-white/40 uppercase">Touba (+)</label>
-                      <input type="number" value={prices.transfert.toubaSUV} className="input-field" onChange={e => onUpdatePrices({...prices, transfert: {...prices.transfert, toubaSUV: parseInt(e.target.value)}})} />
+                      <input type="number" value={localPrices.transfert.toubaSUV} className="input-field" onChange={e => setLocalPrices({...localPrices, transfert: {...localPrices.transfert, toubaSUV: parseInt(e.target.value)}})} />
                     </div>
                     <div className="space-y-1">
                       <label className="text-[10px] text-white/40 uppercase">Tivaouane (+)</label>
-                      <input type="number" value={prices.transfert.tivaouaneSUV} className="input-field" onChange={e => onUpdatePrices({...prices, transfert: {...prices.transfert, tivaouaneSUV: parseInt(e.target.value)}})} />
+                      <input type="number" value={localPrices.transfert.tivaouaneSUV} className="input-field" onChange={e => setLocalPrices({...localPrices, transfert: {...localPrices.transfert, tivaouaneSUV: parseInt(e.target.value)}})} />
                     </div>
                   </div>
                 </div>
@@ -3074,11 +3128,11 @@ const AdminDashboard = ({
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1">
                       <label className="text-[10px] text-white/40 uppercase">Demi-journée (4h)</label>
-                      <input type="number" value={prices.dispo.demiJournee} className="input-field" onChange={e => onUpdatePrices({...prices, dispo: {...prices.dispo, demiJournee: parseInt(e.target.value)}})} />
+                      <input type="number" value={localPrices.dispo.demiJournee} className="input-field" onChange={e => setLocalPrices({...localPrices, dispo: {...localPrices.dispo, demiJournee: parseInt(e.target.value)}})} />
                     </div>
                     <div className="space-y-1">
                       <label className="text-[10px] text-white/40 uppercase">Journée (8h)</label>
-                      <input type="number" value={prices.dispo.journee} className="input-field" onChange={e => onUpdatePrices({...prices, dispo: {...prices.dispo, journee: parseInt(e.target.value)}})} />
+                      <input type="number" value={localPrices.dispo.journee} className="input-field" onChange={e => setLocalPrices({...localPrices, dispo: {...localPrices.dispo, journee: parseInt(e.target.value)}})} />
                     </div>
                   </div>
                 </div>
@@ -3088,15 +3142,15 @@ const AdminDashboard = ({
                   <div className="grid grid-cols-3 gap-4">
                     <div className="space-y-1">
                       <label className="text-[10px] text-white/40 uppercase">Berline</label>
-                      <input type="number" value={prices.location.berline} className="input-field" onChange={e => onUpdatePrices({...prices, location: {...prices.location, berline: parseInt(e.target.value)}})} />
+                      <input type="number" value={localPrices.location.berline} className="input-field" onChange={e => setLocalPrices({...localPrices, location: {...localPrices.location, berline: parseInt(e.target.value)}})} />
                     </div>
                     <div className="space-y-1">
                       <label className="text-[10px] text-white/40 uppercase">SUV</label>
-                      <input type="number" value={prices.location.suv} className="input-field" onChange={e => onUpdatePrices({...prices, location: {...prices.location, suv: parseInt(e.target.value)}})} />
+                      <input type="number" value={localPrices.location.suv} className="input-field" onChange={e => setLocalPrices({...localPrices, location: {...localPrices.location, suv: parseInt(e.target.value)}})} />
                     </div>
                     <div className="space-y-1">
                       <label className="text-[10px] text-white/40 uppercase">Luxe</label>
-                      <input type="number" value={prices.location.luxe} className="input-field" onChange={e => onUpdatePrices({...prices, location: {...prices.location, luxe: parseInt(e.target.value)}})} />
+                      <input type="number" value={localPrices.location.luxe} className="input-field" onChange={e => setLocalPrices({...localPrices, location: {...localPrices.location, luxe: parseInt(e.target.value)}})} />
                     </div>
                   </div>
                 </div>
@@ -3106,17 +3160,26 @@ const AdminDashboard = ({
                   <div className="grid grid-cols-3 gap-4">
                     <div className="space-y-1">
                       <label className="text-[10px] text-white/40 uppercase">Petit</label>
-                      <input type="number" value={prices.bouquets.small} className="input-field" onChange={e => onUpdatePrices({...prices, bouquets: {...prices.bouquets, small: parseInt(e.target.value)}})} />
+                      <input type="number" value={localPrices.bouquets.small} className="input-field" onChange={e => setLocalPrices({...localPrices, bouquets: {...localPrices.bouquets, small: parseInt(e.target.value)}})} />
                     </div>
                     <div className="space-y-1">
                       <label className="text-[10px] text-white/40 uppercase">Moyen</label>
-                      <input type="number" value={prices.bouquets.medium} className="input-field" onChange={e => onUpdatePrices({...prices, bouquets: {...prices.bouquets, medium: parseInt(e.target.value)}})} />
+                      <input type="number" value={localPrices.bouquets.medium} className="input-field" onChange={e => setLocalPrices({...localPrices, bouquets: {...localPrices.bouquets, medium: parseInt(e.target.value)}})} />
                     </div>
                     <div className="space-y-1">
                       <label className="text-[10px] text-white/40 uppercase">Grand</label>
-                      <input type="number" value={prices.bouquets.large} className="input-field" onChange={e => onUpdatePrices({...prices, bouquets: {...prices.bouquets, large: parseInt(e.target.value)}})} />
+                      <input type="number" value={localPrices.bouquets.large} className="input-field" onChange={e => setLocalPrices({...localPrices, bouquets: {...localPrices.bouquets, large: parseInt(e.target.value)}})} />
                     </div>
                   </div>
+                </div>
+
+                <div className="flex justify-end mt-4">
+                  <button 
+                    onClick={() => onUpdatePrices(localPrices)}
+                    className="btn-primary !py-2 !px-6 text-[10px]"
+                  >
+                    Enregistrer les tarifs
+                  </button>
                 </div>
               </div>
             </div>
@@ -3133,8 +3196,8 @@ const AdminDashboard = ({
                   <h4 className="text-gold text-xs uppercase tracking-widest mb-4">Logo de l'entreprise</h4>
                   <div className="flex items-center gap-6">
                     <div className="w-24 h-24 rounded-sm border border-gold/20 bg-gold/5 flex items-center justify-center overflow-hidden p-2">
-                      {logo ? (
-                        <img src={logo} alt="Logo Preview" className="w-full h-full object-contain" />
+                      {localLogo ? (
+                        <img src={localLogo} alt="Logo Preview" className="w-full h-full object-contain" />
                       ) : (
                         <Logo className="scale-75" />
                       )}
@@ -3145,6 +3208,14 @@ const AdminDashboard = ({
                         <input type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
                       </label>
                       <p className="text-[10px] text-white/20 mt-2">Format PNG transparent recommandé.</p>
+                      <div className="flex justify-start mt-4">
+                        <button 
+                          onClick={() => onUpdateLogo(localLogo)}
+                          className="btn-primary !py-2 !px-6 text-[10px]"
+                        >
+                          Enregistrer le logo
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -3153,8 +3224,8 @@ const AdminDashboard = ({
                   <h4 className="text-gold text-xs uppercase tracking-widest mb-4">Photo de Khady</h4>
                   <div className="flex items-center gap-6">
                     <div className="w-24 h-24 rounded-full border-2 border-gold bg-gold/10 flex items-center justify-center overflow-hidden">
-                      {founderPhoto ? (
-                        <img src={founderPhoto} alt="Preview" className="w-full h-full object-cover" />
+                      {localFounderPhoto ? (
+                        <img src={localFounderPhoto} alt="Preview" className="w-full h-full object-cover" />
                       ) : (
                         <span className="text-3xl">👩🏾‍💼</span>
                       )}
@@ -3165,6 +3236,14 @@ const AdminDashboard = ({
                         <input type="file" accept="image/*" className="hidden" onChange={handlePhotoUpload} />
                       </label>
                       <p className="text-[10px] text-white/20 mt-2">Format JPG/PNG recommandé.</p>
+                      <div className="flex justify-start mt-4">
+                        <button 
+                          onClick={() => onUpdatePhoto(localFounderPhoto)}
+                          className="btn-primary !py-2 !px-6 text-[10px]"
+                        >
+                          Enregistrer la photo
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -3173,12 +3252,20 @@ const AdminDashboard = ({
                   <h4 className="text-gold text-xs uppercase tracking-widest mb-4">Nom TikTok</h4>
                   <div className="space-y-1">
                     <label className="text-[10px] text-white/40 uppercase">Identifiant (sans @)</label>
-                    <input 
-                      type="text" 
-                      value={tiktokName} 
-                      className="input-field" 
-                      onChange={e => onUpdateTiktok(e.target.value)} 
-                    />
+                    <div className="flex gap-2">
+                      <input 
+                        type="text" 
+                        value={localTiktokName} 
+                        className="input-field" 
+                        onChange={e => setLocalTiktokName(e.target.value)} 
+                      />
+                      <button 
+                        onClick={() => onUpdateTiktok(localTiktokName)}
+                        className="btn-primary !py-2 !px-6 text-[10px] whitespace-nowrap"
+                      >
+                        Enregistrer TikTok
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
