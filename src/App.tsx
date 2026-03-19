@@ -825,9 +825,8 @@ export default function App() {
         id: doc.id
       })) as TouristSite[];
       
-      if (docs.length > 0) {
-        setTouristSites(docs);
-      }
+      // ALWAYS update state, even if empty, to ensure synchronization
+      setTouristSites(docs);
     }, (error) => {
       handleFirestoreError(error, OperationType.LIST, 'tourisme');
     });
@@ -915,6 +914,8 @@ export default function App() {
   };
 
   const handleUpdateReservation = async (res: Reservation) => {
+    // Optimistic update
+    setReservations(prev => prev.map(r => r.id === res.id ? res : r));
     try {
       await updateDoc(doc(db, 'reservations', res.id), { ...res });
     } catch (err) {
@@ -923,6 +924,8 @@ export default function App() {
   };
 
   const handleCancelReservation = async (id: string) => {
+    // Optimistic update
+    setReservations(prev => prev.map(r => r.id === id ? { ...r, statut: 'cancelled' } : r));
     try {
       await updateDoc(doc(db, 'reservations', id), { statut: 'cancelled' });
       const updated = reservations.find(r => r.id === id);
@@ -995,15 +998,40 @@ export default function App() {
   };
 
   const handleUpdateAllReservations = async (allReservations: Reservation[]) => {
+    // Optimistic update
     setReservations(allReservations);
+    
     try {
+      // For a full sync/restore, we should handle deletions of docs not in the new set
+      const snapshot = await getDocs(collection(db, 'reservations'));
+      const existingIds = snapshot.docs.map(d => d.id);
+      const newIds = allReservations.map(r => r.id);
+      
+      const ops: { type: 'set' | 'delete', doc: any, data?: any }[] = [];
+      
+      // Delete removed
+      existingIds.forEach(id => {
+        if (!newIds.includes(id)) {
+          ops.push({ type: 'delete', doc: doc(db, 'reservations', id) });
+        }
+      });
+      
+      // Set/Update all
+      allReservations.forEach(res => {
+        ops.push({ type: 'set', doc: doc(db, 'reservations', res.id), data: res });
+      });
+      
       // Handle batches of 500
       const BATCH_SIZE = 500;
-      for (let i = 0; i < allReservations.length; i += BATCH_SIZE) {
+      for (let i = 0; i < ops.length; i += BATCH_SIZE) {
         const batch = writeBatch(db);
-        const chunk = allReservations.slice(i, i + BATCH_SIZE);
-        for (const res of chunk) {
-          batch.set(doc(db, 'reservations', res.id), res);
+        const chunk = ops.slice(i, i + BATCH_SIZE);
+        for (const op of chunk) {
+          if (op.type === 'set') {
+            batch.set(op.doc, op.data);
+          } else {
+            batch.delete(op.doc);
+          }
         }
         await batch.commit();
       }
@@ -2061,7 +2089,7 @@ const EditReservationModal = ({
               type="number" 
               value={data.montant || 0} 
               className="input-field" 
-              onChange={e => setData({ ...data, montant: parseInt(e.target.value) })} 
+              onChange={e => setData({ ...data, montant: parseInt(e.target.value) || 0 })} 
             />
           </div>
           <div className="space-y-1">
@@ -2120,7 +2148,7 @@ const EditReservationModal = ({
               type="number" 
               value={data.sieges || 1} 
               className="input-field" 
-              onChange={e => setData({ ...data, sieges: parseInt(e.target.value) })} 
+              onChange={e => setData({ ...data, sieges: parseInt(e.target.value) || 1 })} 
             />
           </div>
           <div className="space-y-1">
@@ -2129,7 +2157,7 @@ const EditReservationModal = ({
               type="number" 
               value={data.valises || 0} 
               className="input-field" 
-              onChange={e => setData({ ...data, valises: parseInt(e.target.value) })} 
+              onChange={e => setData({ ...data, valises: parseInt(e.target.value) || 0 })} 
             />
           </div>
         </div>
@@ -2265,10 +2293,10 @@ const AdminDashboard = ({
   useEffect(() => { setLocalFounderPhoto(founderPhoto); }, [founderPhoto]);
   useEffect(() => { setLocalHeroImage(heroImage); }, [heroImage]);
 
-  const handleSave = async (id: string, promise: Promise<void>) => {
+  const handleSave = async (id: string, action: () => Promise<void>) => {
     setSaving(id);
     try {
-      await promise;
+      await action();
     } finally {
       setSaving(null);
     }
@@ -2889,7 +2917,7 @@ const AdminDashboard = ({
                     <div className="flex justify-end mt-2">
                       <button 
                         disabled={saving === 'hero-image'}
-                        onClick={() => handleSave('hero-image', onUpdateHero(localHeroImage))}
+                        onClick={() => handleSave('hero-image', () => onUpdateHero(localHeroImage))}
                         className="btn-primary !py-2 !px-6 text-[10px] disabled:opacity-50"
                       >
                         {saving === 'hero-image' ? 'Enregistrement...' : "Enregistrer l'image hero"}
@@ -2921,7 +2949,7 @@ const AdminDashboard = ({
                 <div className="flex justify-end">
                   <button 
                     disabled={saving === 'hero-text'}
-                    onClick={() => handleSave('hero-text', onUpdateHeroText(localHeroTitle, localHeroSubtitle))}
+                    onClick={() => handleSave('hero-text', () => onUpdateHeroText(localHeroTitle, localHeroSubtitle))}
                     className="btn-primary !py-2 !px-6 text-[10px] disabled:opacity-50"
                   >
                     {saving === 'hero-text' ? 'Enregistrement...' : 'Enregistrer les textes'}
@@ -2999,7 +3027,7 @@ const AdminDashboard = ({
               <div className="flex justify-end mt-4">
                 <button 
                   disabled={saving === 'services'}
-                  onClick={() => handleSave('services', onUpdateServices(localServices))}
+                  onClick={() => handleSave('services', () => onUpdateServices(localServices))}
                   className="btn-primary !py-2 !px-6 text-[10px] disabled:opacity-50"
                 >
                   {saving === 'services' ? 'Enregistrement...' : 'Enregistrer les services'}
@@ -3075,7 +3103,7 @@ const AdminDashboard = ({
               <div className="flex justify-end mt-4">
                 <button 
                   disabled={saving === 'reviews'}
-                  onClick={() => handleSave('reviews', onUpdateReviews(localReviews))}
+                  onClick={() => handleSave('reviews', () => onUpdateReviews(localReviews))}
                   className="btn-primary !py-2 !px-6 text-[10px] disabled:opacity-50"
                 >
                   {saving === 'reviews' ? 'Enregistrement...' : 'Enregistrer les avis'}
@@ -3278,7 +3306,7 @@ const AdminDashboard = ({
                 <div className="flex justify-end mt-4">
                   <button 
                     disabled={saving === 'prices'}
-                    onClick={() => handleSave('prices', onUpdatePrices(localPrices))}
+                    onClick={() => handleSave('prices', () => onUpdatePrices(localPrices))}
                     className="btn-primary !py-2 !px-6 text-[10px] disabled:opacity-50"
                   >
                     {saving === 'prices' ? 'Enregistrement...' : 'Enregistrer les tarifs'}
@@ -3314,7 +3342,7 @@ const AdminDashboard = ({
                       <div className="flex justify-start mt-4">
                         <button 
                           disabled={saving === 'logo'}
-                          onClick={() => handleSave('logo', onUpdateLogo(localLogo || ''))}
+                          onClick={() => handleSave('logo', () => onUpdateLogo(localLogo || ''))}
                           className="btn-primary !py-2 !px-6 text-[10px] disabled:opacity-50"
                         >
                           {saving === 'logo' ? 'Enregistrement...' : 'Enregistrer le logo'}
@@ -3343,7 +3371,7 @@ const AdminDashboard = ({
                       <div className="flex justify-start mt-4">
                         <button 
                           disabled={saving === 'photo'}
-                          onClick={() => handleSave('photo', onUpdatePhoto(localFounderPhoto || ''))}
+                          onClick={() => handleSave('photo', () => onUpdatePhoto(localFounderPhoto || ''))}
                           className="btn-primary !py-2 !px-6 text-[10px] disabled:opacity-50"
                         >
                           {saving === 'photo' ? 'Enregistrement...' : 'Enregistrer la photo'}
@@ -3366,7 +3394,7 @@ const AdminDashboard = ({
                       />
                       <button 
                         disabled={saving === 'tiktok'}
-                        onClick={() => handleSave('tiktok', onUpdateTiktok(localTiktokName))}
+                        onClick={() => handleSave('tiktok', () => onUpdateTiktok(localTiktokName))}
                         className="btn-primary !py-2 !px-6 text-[10px] whitespace-nowrap disabled:opacity-50"
                       >
                         {saving === 'tiktok' ? 'Enregistrement...' : 'Enregistrer TikTok'}
