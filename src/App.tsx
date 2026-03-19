@@ -1005,6 +1005,19 @@ export default function App() {
     }
   };
 
+  const handleUpdateAllReservations = async (allReservations: Reservation[]) => {
+    setReservations(allReservations);
+    try {
+      const batch = writeBatch(db);
+      for (const res of allReservations) {
+        batch.set(doc(db, 'reservations', res.id), res);
+      }
+      await batch.commit();
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, 'reservations_batch');
+    }
+  };
+
   const handleUpdateTouristSites = async (sites: TouristSite[]) => {
     // Optimistic update
     setTouristSites(sites);
@@ -1175,6 +1188,7 @@ export default function App() {
             onUpdateTiktok={handleUpdateTiktok}
             touristSites={touristSites}
             onUpdateTouristSites={handleUpdateTouristSites}
+            onUpdateAllReservations={handleUpdateAllReservations}
             onClose={() => setIsAdminOpen(false)} 
             user={user}
             onLogin={handleLogin}
@@ -2177,32 +2191,34 @@ const AdminDashboard = ({
   onUpdateServices,
   reviews,
   onUpdateReviews,
+  onUpdateAllReservations,
   onClose,
   user,
   onLogin,
   onLogout
 }: { 
   reservations: Reservation[], 
-  onUpdate: (r: Reservation) => void, 
+  onUpdate: (r: Reservation) => Promise<void>, 
   prices: any,
-  onUpdatePrices: (p: any) => void,
+  onUpdatePrices: (p: any) => Promise<void>,
   founderPhoto: string | null,
-  onUpdatePhoto: (p: string) => void,
+  onUpdatePhoto: (p: string) => Promise<void>,
   logo: string | null,
-  onUpdateLogo: (l: string) => void,
+  onUpdateLogo: (l: string) => Promise<void>,
   heroImage: string,
-  onUpdateHero: (h: string) => void,
+  onUpdateHero: (h: string) => Promise<void>,
   heroTitle: string,
   heroSubtitle: string,
-  onUpdateHeroText: (t: string, s: string) => void,
+  onUpdateHeroText: (t: string, s: string) => Promise<void>,
   services: ServiceItem[],
-  onUpdateServices: (s: ServiceItem[]) => void,
+  onUpdateServices: (s: ServiceItem[]) => Promise<void>,
   reviews: ReviewItem[],
-  onUpdateReviews: (r: ReviewItem[]) => void,
+  onUpdateReviews: (r: ReviewItem[]) => Promise<void>,
   tiktokName: string,
-  onUpdateTiktok: (n: string) => void,
+  onUpdateTiktok: (n: string) => Promise<void>,
   touristSites: TouristSite[],
-  onUpdateTouristSites: (s: TouristSite[]) => void,
+  onUpdateTouristSites: (s: TouristSite[]) => Promise<void>,
+  onUpdateAllReservations: (r: Reservation[]) => Promise<void>,
   onClose: () => void,
   user: User | null,
   onLogin: () => void,
@@ -2213,7 +2229,7 @@ const AdminDashboard = ({
   const [search, setSearch] = useState('');
   const [editingRes, setEditingRes] = useState<Reservation | null>(null);
   const [editingSite, setEditingSite] = useState<TouristSite | null>(null);
-  const [isCompressing, setIsCompressing] = useState(false);
+  const [adminLoading, setAdminLoading] = useState<string | null>(null);
 
   // Local states for explicit saving
   const [localHeroTitle, setLocalHeroTitle] = useState(heroTitle);
@@ -2287,25 +2303,33 @@ const AdminDashboard = ({
       reader.onload = async (event) => {
         try {
           const data = JSON.parse(event.target?.result as string);
+          setAdminLoading("Importation des données...");
+          
+          const updates: Promise<any>[] = [];
           
           // Update everything
-          if (data.prices) onUpdatePrices(data.prices);
-          if (data.services) onUpdateServices(data.services);
-          if (data.reviews) onUpdateReviews(data.reviews);
-          if (data.touristSites) onUpdateTouristSites(data.touristSites);
+          if (data.prices) updates.push(onUpdatePrices(data.prices));
+          if (data.services) updates.push(onUpdateServices(data.services));
+          if (data.reviews) updates.push(onUpdateReviews(data.reviews));
+          if (data.touristSites) updates.push(onUpdateTouristSites(data.touristSites));
+          if (data.reservations) updates.push(onUpdateAllReservations(data.reservations));
           
           if (data.siteConfig) {
             const config = data.siteConfig;
-            if (config.heroImage) onUpdateHero(config.heroImage);
-            if (config.heroTitle && config.heroSubtitle) onUpdateHeroText(config.heroTitle, config.heroSubtitle);
-            if (config.logo) onUpdateLogo(config.logo);
-            if (config.founderPhoto) onUpdatePhoto(config.founderPhoto);
-            if (config.tiktokName) onUpdateTiktok(config.tiktokName);
+            if (config.heroImage) updates.push(onUpdateHero(config.heroImage));
+            if (config.heroTitle && config.heroSubtitle) updates.push(onUpdateHeroText(config.heroTitle, config.heroSubtitle));
+            if (config.logo) updates.push(onUpdateLogo(config.logo));
+            if (config.founderPhoto) updates.push(onUpdatePhoto(config.founderPhoto));
+            if (config.tiktokName) updates.push(onUpdateTiktok(config.tiktokName));
           }
           
+          await Promise.all(updates);
+          
+          setAdminLoading(null);
           alert("Données importées avec succès !");
         } catch (err) {
           console.error(err);
+          setAdminLoading(null);
           alert("Erreur lors de l'importation du fichier JSON.");
         }
       };
@@ -2349,12 +2373,12 @@ const AdminDashboard = ({
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      setIsCompressing(true);
+      setAdminLoading("Optimisation de l'image...");
       const reader = new FileReader();
       reader.onloadend = async () => {
         const compressed = await compressImage(reader.result as string, 800, 800, 0.8);
         setLocalFounderPhoto(compressed);
-        setIsCompressing(false);
+        setAdminLoading(null);
       };
       reader.readAsDataURL(file);
     }
@@ -2363,12 +2387,12 @@ const AdminDashboard = ({
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      setIsCompressing(true);
+      setAdminLoading("Optimisation de l'image...");
       const reader = new FileReader();
       reader.onloadend = async () => {
         const compressed = await compressImage(reader.result as string, 400, 400, 0.9);
         setLocalLogo(compressed);
-        setIsCompressing(false);
+        setAdminLoading(null);
       };
       reader.readAsDataURL(file);
     }
@@ -2377,12 +2401,12 @@ const AdminDashboard = ({
   const handleHeroUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      setIsCompressing(true);
+      setAdminLoading("Optimisation de l'image...");
       const reader = new FileReader();
       reader.onloadend = async () => {
         const compressed = await compressImage(reader.result as string, 1920, 1080, 0.7);
         setLocalHeroImage(compressed);
-        setIsCompressing(false);
+        setAdminLoading(null);
       };
       reader.readAsDataURL(file);
     }
@@ -2436,7 +2460,7 @@ const AdminDashboard = ({
       className="fixed inset-0 z-[300] bg-dark overflow-y-auto"
     >
       <AnimatePresence>
-        {isCompressing && (
+        {adminLoading && (
           <motion.div 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -2444,8 +2468,8 @@ const AdminDashboard = ({
             className="fixed inset-0 z-[500] bg-dark/80 backdrop-blur-sm flex flex-col items-center justify-center"
           >
             <div className="w-12 h-12 border-4 border-gold border-t-transparent rounded-full animate-spin mb-4" />
-            <p className="text-gold font-serif text-lg">Optimisation de l'image...</p>
-            <p className="text-white/40 text-xs mt-2">Cela permet d'accélérer le chargement du site.</p>
+            <p className="text-gold font-serif text-lg">{adminLoading}</p>
+            <p className="text-white/40 text-xs mt-2">Veuillez patienter pendant l'opération.</p>
           </motion.div>
         )}
         {editingRes && (
@@ -2727,12 +2751,12 @@ const AdminDashboard = ({
                               onChange={async (e) => {
                                 const file = e.target.files?.[0];
                                 if (file) {
-                                  setIsCompressing(true);
+                                  setAdminLoading("Optimisation de l'image...");
                                   const reader = new FileReader();
                                   reader.onloadend = async () => {
                                     const compressed = await compressImage(reader.result as string, 1200, 800, 0.7);
                                     setEditingSite({ ...editingSite, img: compressed });
-                                    setIsCompressing(false);
+                                    setAdminLoading(null);
                                   };
                                   reader.readAsDataURL(file);
                                 }
